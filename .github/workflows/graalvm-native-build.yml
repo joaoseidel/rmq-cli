@@ -1,0 +1,100 @@
+﻿name: GraalVM Native Image Multi-Platform Build
+
+on:
+  release:
+    types: [ released ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        java-version: [ '23' ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+          cache: 'gradle'
+
+      - name: Build with Gradle (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ./gradlew
+          ./gradlew nativeCompile
+
+      - name: Build with Gradle (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          ./gradlew.bat nativeCompile
+
+      # Create ZIP archive - Unix
+      - name: Create ZIP archive (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "macOS" ]; then
+            zip -j rmq-mac.zip rmq-cli-app/build/native/nativeCompile/rmq
+            echo "ARTIFACT_NAME=mac" >> $GITHUB_ENV
+            echo "ZIP_NAME=rmq-mac.zip" >> $GITHUB_ENV
+          else
+            zip -j rmq-linux.zip rmq-cli-app/build/native/nativeCompile/rmq
+            echo "ARTIFACT_NAME=linux" >> $GITHUB_ENV
+            echo "ZIP_NAME=rmq-linux.zip" >> $GITHUB_ENV
+          fi
+
+      # Create ZIP archive - Windows (using PowerShell)
+      - name: Create ZIP archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ZipName = "rmq-windows.zip"
+          $BinaryPath = "rmq-cli-app\build\native\nativeCompile\rmq.exe"
+          
+          # Create a new zip file
+          Compress-Archive -Path $BinaryPath -DestinationPath $ZipName -Force
+          
+          # Set environment variables
+          echo "ARTIFACT_NAME=windows" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "ZIP_NAME=$ZipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 1
+
+  release:
+    name: Attach to Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Add to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows/rmq-windows.zip
+            artifacts/mac/rmq-mac.zip
+            artifacts/linux/rmq-linux.zip
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
