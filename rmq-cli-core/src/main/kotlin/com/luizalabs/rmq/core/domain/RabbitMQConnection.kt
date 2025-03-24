@@ -41,9 +41,9 @@ private val logger = KotlinLogging.logger {}
  * @property keepAlive Internal state to control connection lifecycle
  */
 class RabbitMQConnection(
-    val channel: Channel,
-    val connection: Connection,
-    val connectionInfo: com.luizalabs.rmq.core.domain.Connection,
+    val channel: Channel?,
+    val connection: Connection?,
+    val connectionInfo: ConnectionInfo,
     private var keepAlive: Boolean = false
 ) : AutoCloseable {
 
@@ -54,8 +54,8 @@ class RabbitMQConnection(
         }
 
         try {
-            if (channel.isOpen) channel.close()
-            if (connection.isOpen) connection.close()
+            if (channel?.isOpen == true) channel.close()
+            if (connection?.isOpen == true) connection.close()
         } catch (e: Exception) {
             logger.error { "Error closing connection: ${e.message}" }
         }
