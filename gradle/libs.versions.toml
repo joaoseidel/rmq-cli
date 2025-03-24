@@ -1,0 +1,57 @@
+[versions]
+kotlin = "2.1.20"
+kotlinxDatetime = "0.6.1"
+kotlinxSerializationJSON = "1.7.2"
+kotlinxCoroutines = "1.10.1"
+kotlinxKover = "0.9.1"
+rabbitMQ = "5.24.0"
+kotlinLogging = "7.0.3"
+logback = "1.5.18"
+slf4j = "2.0.17"
+clikt = "5.0.1"
+kotest = "5.9.1"
+mockk = "1.13.17"
+graalNative = "0.10.6"
+shadow = "8.3.6"
+ksp = "2.1.20-1.0.31"
+koin = "4.0.2"
+koinAnnotations = "2.0.0"
+
+[libraries]
+# Koltinx
+kotlinxDatetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinxSerialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJSON" }
+kotlinxCoroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+# Core libraries
+rabbitMQ = { module = "com.rabbitmq:amqp-client", version.ref = "rabbitMQ" }
+koinKsp = { module = "io.insert-koin:koin-ksp-compiler", version.ref = "koinAnnotations" }
+koinCore = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koinAnnotations = { module = "io.insert-koin:koin-annotations", version.ref = "koinAnnotations" }
+# Clikt libraries
+clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
+cliktMarkdown = { module = "com.github.ajalt.clikt:clikt-markdown", version.ref = "clikt" }
+# Logging libraries
+kotlinLogging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
+slf4jApi = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback = { module = "ch.qos.logback:logback-core", version.ref = "logback" }
+logbackCassic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+# Testing libraries
+kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+kotestProperty = { module = "io.kotest:kotest-property", version.ref = "kotest" }
+kotestAssertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+
+[bundles]
+kotlinxEcosystem = ["kotlinxDatetime", "kotlinxSerialization", "kotlinxCoroutines"]
+logging = ["slf4jApi", "kotlinLogging", "logback", "logbackCassic"]
+clikt = ["clikt", "cliktMarkdown"]
+koin = ["koinCore", "koinAnnotations"]
+testing = ["kotest", "kotestAssertions", "kotestProperty", "mockk"]
+
+[plugins]
+kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+graalNative = { id = "org.graalvm.buildtools.native", version.ref = "graalNative" }
+kotlinxKover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kotlinxKover" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
