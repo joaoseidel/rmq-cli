@@ -1,7 +1,7 @@
 ﻿package com.luizalabs.rmq.core.ports.input
 
 import com.luizalabs.rmq.core.domain.CancellationCallback
-import com.luizalabs.rmq.core.domain.Connection
+import com.luizalabs.rmq.core.domain.ConnectionInfo
 import com.luizalabs.rmq.core.domain.Message
 import com.luizalabs.rmq.core.domain.MessageCallback
 import com.luizalabs.rmq.core.domain.Queue
@@ -21,7 +21,7 @@ interface RabbitMQClient {
      * @return true if the connection was successful, false otherwise
      */
     fun connect(
-        connectionInfo: Connection
+        connectionInfo: ConnectionInfo
     ): RabbitMQConnection?
 
     /**
@@ -31,7 +31,7 @@ interface RabbitMQClient {
      * @return true if the connection was successful, false otherwise
      */
     fun testConnection(
-        connectionInfo: Connection
+        connectionInfo: ConnectionInfo
     ): Boolean
 
     /**
