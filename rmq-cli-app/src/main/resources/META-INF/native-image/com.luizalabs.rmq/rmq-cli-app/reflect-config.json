@@ -54,6 +54,18 @@
     "allDeclaredConstructors": true
   },
   {
+    "name": "com.rabbitmq.http.*",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.fasterxml.jackson.core.*",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
     "name": "kotlinx.serialization.*",
     "allDeclaredFields": true,
     "allDeclaredMethods": true,
