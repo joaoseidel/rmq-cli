@@ -3,6 +3,7 @@
 
 package com.luizalabs.rmq.app.adapter.ports.output
 
+import com.luizalabs.rmq.app.configuration.json
 import com.luizalabs.rmq.core.ports.output.SettingsStore
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -36,13 +37,6 @@ private val logger = KotlinLogging.logger {}
 class JsonSettingsStore : SettingsStore {
     private val configDir = "${System.getProperty("user.home")}/.rmq-cli"
     private val settingsFile = "$configDir/settings.json"
-
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-        isLenient = true
-        encodeDefaults = true
-    }
 
     // In-memory settings data
     private var rootObject: JsonObject = JsonObject(emptyMap())
