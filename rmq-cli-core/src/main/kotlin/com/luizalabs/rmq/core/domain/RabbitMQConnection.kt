@@ -49,7 +49,7 @@ class RabbitMQConnection(
 
     override fun close() {
         if (keepAlive) {
-            logger.warn { "Close called on connection, but keepAlive is enabled" }
+            logger.debug { "Close called on connection, but keepAlive is enabled" }
             return
         }
 
