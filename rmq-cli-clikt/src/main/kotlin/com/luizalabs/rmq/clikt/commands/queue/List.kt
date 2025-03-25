@@ -17,6 +17,7 @@ class List : CliktCommandWrapper("list") {
     private val queueOperations: QueueOperations by inject(QueueOperations::class.java)
 
     private val verbose by option("--verbose", help = "Show detailed queue information").flag()
+    private val pattern by option("--pattern", "-p", help = "Filter queues by name pattern (glob syntax: * and ? wildcards are supported)")
 
     override suspend fun run() {
         val terminal = terminal
@@ -24,7 +25,7 @@ class List : CliktCommandWrapper("list") {
         withConnection { connection ->
             val vhost = connection.connectionInfo.vHost
 
-            val queues = queueOperations.listQueues(connection).ifEmpty {
+            val queues = queueOperations.listQueues(connection, pattern).ifEmpty {
                 terminal.error("No queues found in vhost ${terminal.formatName(vhost.name)}.")
                 return@withConnection
             }
@@ -35,7 +36,7 @@ class List : CliktCommandWrapper("list") {
             if (verbose) {
                 queues.forEachIndexed { i, queue -> echo("${i + 1}. ${terminal.formatProperty(queue.toString())}") }
             } else {
-                echo(queues.toTable(terminal))
+                echo(queues.toTable(terminal, pattern ?: ""))
             }
         }
     }
