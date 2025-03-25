@@ -23,6 +23,9 @@ jobs:
         with:
           node-version: "lts/*"
 
+      - name: Install Semantic Release and plugins
+        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/npm @semantic-release/github @semantic-release/git
+
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_SMR_TOKEN }}
