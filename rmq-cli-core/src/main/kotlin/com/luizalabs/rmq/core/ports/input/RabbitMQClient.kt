@@ -7,6 +7,12 @@ import com.luizalabs.rmq.core.domain.MessageCallback
 import com.luizalabs.rmq.core.domain.Queue
 import com.luizalabs.rmq.core.domain.RabbitMQConnection
 import com.luizalabs.rmq.core.domain.VHost
+import com.luizalabs.rmq.core.toGlobRegex
+import com.rabbitmq.http.client.Client
+import com.rabbitmq.http.client.ClientParameters
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 /**
  * Input port that defines operations that can be performed with a RabbitMQ broker.
@@ -51,25 +57,10 @@ interface RabbitMQClient {
     ): Boolean
 
     /**
-     * Finds a message in a queue.
+     * Gets messages from a queue using exact queue name.
+     * Use this for operations that modify state.
      *
-     * @param messageId Message ID
-     * @param queueName Queue name
-     * @param autoAck If the message should be acknowledged
-     * @param connection Connection to use
-     * @return Message
-     */
-    fun findMessage(
-        messageId: String,
-        queueName: String,
-        autoAck: Boolean = false,
-        connection: RabbitMQConnection
-    ): Message?
-
-    /**
-     * Gets messages from a queue.
-     *
-     * @param queueName Queue name
+     * @param queueName Exact queue name
      * @param count Number of messages to get
      * @param ack If the messages should be acknowledged
      * @param connection Connection to use
@@ -81,6 +72,71 @@ interface RabbitMQClient {
         ack: Boolean = false,
         connection: RabbitMQConnection
     ): List<Message>
+
+    /**
+     * Gets messages from queues matching a pattern.
+     * Use this for search/listing operations only.
+     *
+     * @param queueNamePattern Pattern to filter queues (Glob syntax)
+     * @param count Number of messages to get per queue
+     * @param ack If the messages should be acknowledged
+     * @param connection Connection to use
+     * @return List of messages
+     */
+    fun getMessagesByPattern(
+        queueNamePattern: String,
+        count: Int,
+        ack: Boolean,
+        connection: RabbitMQConnection
+    ): List<Message> {
+        val queues = listQueuesByPattern(queueNamePattern, connection)
+        val allMessages = mutableListOf<Message>()
+
+        for (queue in queues) {
+            val messagesPerQueue = getMessages(queue.name, count, ack, connection)
+            allMessages.addAll(messagesPerQueue)
+        }
+
+        return allMessages
+    }
+
+    /**
+     * Finds a message by ID in a specific queue.
+     *
+     * @param messageId Message ID
+     * @param queueName Exact queue name
+     * @param autoAck If the message should be acknowledged
+     * @param connection Connection to use
+     * @return Message if found, null otherwise
+     */
+    fun findMessage(
+        messageId: String,
+        queueName: String,
+        autoAck: Boolean,
+        connection: RabbitMQConnection
+    ): Message? {
+        return getMessages(queueName, Int.MAX_VALUE, autoAck, connection)
+            .find { it.id == messageId }
+    }
+
+    /**
+     * Finds a message by ID in queues matching a pattern.
+     *
+     * @param messageId Message ID
+     * @param queueNamePattern Pattern to filter queues (Glob syntax)
+     * @param autoAck If the message should be acknowledged
+     * @param connection Connection to use
+     * @return Message if found, null otherwise
+     */
+    fun findMessageByPattern(
+        messageId: String,
+        queueNamePattern: String,
+        autoAck: Boolean,
+        connection: RabbitMQConnection
+    ): Message? {
+        return getMessagesByPattern(queueNamePattern, Int.MAX_VALUE, autoAck, connection)
+            .find { it.id == messageId }
+    }
 
     /**
      * Acknowledges a message.
@@ -114,9 +170,54 @@ interface RabbitMQClient {
      * @param connection Connection information
      * @return List of queues
      */
+    fun listQueues(connection: RabbitMQConnection): List<Queue> =
+        listQueues(null, connection)
+
+    /**
+     * Lists queues that match a specific pattern.
+     *
+     * @param pattern Pattern to filter queues (Glob syntax: *, ?)
+     * @param connection Connection information
+     * @return List of queues matching the pattern
+     */
+    fun listQueuesByPattern(pattern: String, connection: RabbitMQConnection): List<Queue> =
+        listQueues(pattern, connection)
+
+    /**
+     * Lists queues of an established connection with optional pattern filtering.
+     *
+     * @param pattern Pattern to filter queues (Glob syntax: *, ?) (null means no filtering)
+     * @param connection Connection information
+     * @return List of queues matching the pattern
+     */
     fun listQueues(
+        pattern: String?,
         connection: RabbitMQConnection
-    ): List<Queue>
+    ) = withHttpClient(connection.connectionInfo) { client ->
+        try {
+            val queueList = client.queues
+                ?.map {
+                    Queue(
+                        name = it.name,
+                        vhost = it.vhost,
+                        messagesReady = it.messagesReady,
+                        messagesUnacknowledged = it.messagesUnacknowledged,
+                    )
+                }
+                ?.sortedBy { it.messagesReady + it.messagesUnacknowledged }
+                ?: emptyList()
+
+            if (pattern != null) {
+                val regex = pattern.toGlobRegex()
+                queueList.filter { regex.matches(it.name) }
+            } else {
+                queueList
+            }
+        } catch (e: Exception) {
+            logger.error { "Failed to list queues: ${e.message}" }
+            emptyList()
+        }
+    }
 
     /**
      * Lists vhosts of an established connection.
@@ -126,7 +227,22 @@ interface RabbitMQClient {
      */
     fun listVHosts(
         connection: RabbitMQConnection
-    ): List<VHost>
+    ) = withHttpClient(connection.connectionInfo) { client ->
+        try {
+            val vHostList = client.vhosts?.map {
+                VHost(
+                    name = it.name,
+                    description = it.description,
+                    isDefault = connection.connectionInfo.vHost.name == it.name
+                )
+            }
+
+            vHostList ?: emptyList()
+        } catch (e: Exception) {
+            logger.error { "Failed to list vhosts: ${e.message}" }
+            emptyList()
+        }
+    }
 
     /**
      * Consumes messages from a queue.
@@ -159,4 +275,21 @@ interface RabbitMQClient {
         consumerTag: String,
         connection: RabbitMQConnection
     ): Boolean
+
+    /**
+     * Wrapper function to execute a block of code with an HTTP client.
+     *
+     * @param connectionInfo Connection information
+     * @param block Block of code to execute
+     */
+    fun <T> withHttpClient(connectionInfo: ConnectionInfo, block: (Client) -> T): T {
+        val client = Client(
+            ClientParameters()
+                .url(connectionInfo.getHttpApiUrl())
+                .username(connectionInfo.username)
+                .password(connectionInfo.password)
+        )
+
+        return block(client)
+    }
 }
