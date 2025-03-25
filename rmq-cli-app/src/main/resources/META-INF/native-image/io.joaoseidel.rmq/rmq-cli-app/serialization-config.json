@@ -1,0 +1,22 @@
+[
+  {
+    "name": "io.joaoseidel.rmq.core.domain.Connection",
+    "allPublicFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "io.joaoseidel.rmq.core.domain.VHost",
+    "allPublicFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "io.joaoseidel.rmq.core.domain.Queue",
+    "allPublicFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "io.joaoseidel.rmq.core.domain.Message",
+    "allPublicFields": true,
+    "allDeclaredConstructors": true
+  }
+]

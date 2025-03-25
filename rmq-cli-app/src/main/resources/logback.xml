@@ -20,5 +20,5 @@
     </root>
 
     <!-- Set specific loggers to DEBUG if needed -->
-    <logger name="com.luizalabs.rmq" level="DEBUG"/>
+    <logger name="io.joaoseidel.rmq" level="DEBUG"/>
 </configuration>

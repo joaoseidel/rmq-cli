@@ -10,7 +10,7 @@ plugins {
 }
 
 application {
-    mainClass = "com.luizalabs.rmq.app.MainKt"
+    mainClass = "io.joaoseidel.rmq.app.MainKt"
 }
 
 dependencies {
@@ -73,11 +73,11 @@ tasks.register<JavaExec>("runWithAgent") {
     group = "application"
     description = "Runs the application with the GraalVM tracing agent"
 
-    mainClass.set("com.luizalabs.rmq.app.MainKt")
+    mainClass.set("io.joaoseidel.rmq.app.MainKt")
     classpath = sourceSets["main"].runtimeClasspath
 
 //    jvmArgs = listOf(
-//        "-agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/native-image/com.luizalabs.rmq/rmq-cli-app,config-write-period-secs=5,config-write-initial-delay-secs=5"
+//        "-agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/native-image/io.joaoseidel.rmq/rmq-cli-app,config-write-period-secs=5,config-write-initial-delay-secs=5"
 //    )
 
     args = listOf(
