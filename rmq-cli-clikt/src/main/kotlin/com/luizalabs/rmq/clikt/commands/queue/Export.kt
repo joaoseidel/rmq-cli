@@ -15,7 +15,6 @@ import com.luizalabs.rmq.clikt.formatCount
 import com.luizalabs.rmq.clikt.formatName
 import com.luizalabs.rmq.core.usecase.MessageOperations
 import com.luizalabs.rmq.core.usecase.QueueOperations
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.koin.java.KoinJavaComponent.inject
 import java.io.File
