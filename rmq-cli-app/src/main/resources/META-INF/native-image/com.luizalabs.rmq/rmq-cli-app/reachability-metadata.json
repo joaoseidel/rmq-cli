@@ -1,6 +1,9 @@
 {
   "reflection": [
     {
+      "type": "[Ljava.lang.Object;"
+    },
+    {
       "type": "ch.qos.logback.classic.encoder.PatternLayoutEncoder",
       "methods": [
         {
@@ -142,7 +145,7 @@
       "type": "com.github.ajalt.mordant.terminal.terminalinterface.nativeimage.TerminalInterfaceProviderNativeImage"
     },
     {
-      "type": "com.luizalabs.rmq.core.domain.Connection",
+      "type": "com.luizalabs.rmq.core.domain.ConnectionInfo",
       "fields": [
         {
           "name": "Companion"
@@ -150,7 +153,7 @@
       ]
     },
     {
-      "type": "com.luizalabs.rmq.core.domain.Connection$Companion",
+      "type": "com.luizalabs.rmq.core.domain.ConnectionInfo$Companion",
       "methods": [
         {
           "name": "serializer",
