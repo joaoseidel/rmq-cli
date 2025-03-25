@@ -5,6 +5,8 @@ kotlinxSerializationJSON = "1.8.0"
 kotlinxCoroutines = "1.10.1"
 kotlinxKover = "0.9.1"
 rabbitMQ = "5.24.0"
+rabbitMQHttp = "5.3.0"
+jackson = "2.18.1"
 kotlinLogging = "7.0.3"
 logback = "1.5.18"
 slf4j = "2.0.17"
@@ -22,8 +24,11 @@ koinAnnotations = "2.0.0"
 kotlinxDatetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinxSerialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJSON" }
 kotlinxCoroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
-# Core libraries
+# RabbitMQ libraries
 rabbitMQ = { module = "com.rabbitmq:amqp-client", version.ref = "rabbitMQ" }
+rabbitMQHttp = { module = "com.rabbitmq:http-client", version.ref = "rabbitMQHttp" }
+jackson = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+# Koin libraries
 koinKsp = { module = "io.insert-koin:koin-ksp-compiler", version.ref = "koinAnnotations" }
 koinCore = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koinAnnotations = { module = "io.insert-koin:koin-annotations", version.ref = "koinAnnotations" }
@@ -46,6 +51,7 @@ kotlinxEcosystem = ["kotlinxDatetime", "kotlinxSerialization", "kotlinxCoroutine
 logging = ["slf4jApi", "kotlinLogging", "logback", "logbackCassic"]
 clikt = ["clikt", "cliktMarkdown"]
 koin = ["koinCore", "koinAnnotations"]
+rabbitMQ = ["rabbitMQ", "rabbitMQHttp", "jackson"]
 testing = ["kotest", "kotestAssertions", "kotestProperty", "mockk"]
 
 [plugins]
