@@ -7,11 +7,12 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
+import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.terminal.success
 import com.luizalabs.rmq.clikt.error
 import com.luizalabs.rmq.clikt.formatProperty
-import com.luizalabs.rmq.core.domain.Connection
+import com.luizalabs.rmq.core.domain.ConnectionInfo
 import com.luizalabs.rmq.core.domain.VHost
 import com.luizalabs.rmq.core.usecase.ConnectionOperations
 import org.koin.java.KoinJavaComponent.inject
@@ -21,31 +22,65 @@ class Add : SuspendingCliktCommand("add") {
 
     private val name by argument("name", help = "Friendly name for the connection")
     private val host by option("--host", help = "RabbitMQ server hostname").required()
-    private val port by option("--port", help = "RabbitMQ server port").int().required()
     private val username by option("--username", help = "RabbitMQ username").required()
     private val password by option("--password", help = "RabbitMQ password").required()
     private val vhost by option("--vhost", help = "RabbitMQ virtual host").default("/")
     private val useSsl by option("--ssl", help = "Use SSL/TLS for connection").flag()
 
-    override suspend fun run() {
-        val connection = Connection(
-            name = name,
-            host = host,
-            port = port,
-            username = username,
-            password = password,
-            vHost = VHost(name = vhost),
-            useSsl = useSsl,
-            isDefault = true,
-        )
+    private val connectionType by option(
+        "--type",
+        help = "Connection type: 'amqp' for messaging or 'http' for management API only"
+    ).choice("amqp", "http")
 
+    private val amqpPort by option(
+        "--amqp-port",
+        help = "Port for AMQP protocol (default: 5672)"
+    ).int().default(5672)
+
+    private val httpPort by option(
+        "--http-port",
+        help = "Port for HTTP Management API (default: 15672)"
+    ).int().default(15672)
+
+    override suspend fun run() {
+        val vHostObj = VHost(name = vhost)
         val terminal = terminal
+
+        val connection = when (connectionType) {
+            "amqp" -> ConnectionInfo.AmqpConnectionInfo(
+                name = name,
+                host = host,
+                amqpPort = amqpPort,
+                httpPort = httpPort,
+                username = username,
+                password = password,
+                vHost = vHostObj,
+                useSsl = useSsl,
+                isDefault = true
+            )
+
+            "http" -> ConnectionInfo.HttpConnectionInfo(
+                name = name,
+                host = host,
+                httpPort = httpPort,
+                username = username,
+                password = password,
+                vHost = vHostObj,
+                useSsl = useSsl,
+                isDefault = true
+            )
+
+            else -> {
+                terminal.error("Invalid connection type: $connectionType. Must be either 'amqp' or 'http'.")
+                return
+            }
+        }
 
         val result = connectionOperations.addConnection(connection)
 
         if (result) {
-            terminal.success("Added connection $name. This connection is now the default.")
-            echo("You can now set the default vhost with ${terminal.formatProperty("rmq connection vhost set-default <vhost-name>")}.")
+            terminal.success("Added $connectionType connection '$name'. This connection is now the default.")
+            echo("You can now set the default vhost with '${terminal.formatProperty("rmq connection vhost set-default <vhost-name>")}'.")
         } else {
             terminal.error("Failed to add connection. Check credentials and server availability.")
         }
