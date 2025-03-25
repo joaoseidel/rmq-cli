@@ -1,6 +1,6 @@
 ﻿package com.luizalabs.rmq.core.usecase
 
-import com.luizalabs.rmq.core.domain.Connection
+import com.luizalabs.rmq.core.domain.ConnectionInfo
 import com.luizalabs.rmq.core.ports.input.RabbitMQClient
 import com.luizalabs.rmq.core.ports.output.ConfigurationStore
 import org.koin.core.annotation.Singleton
@@ -22,13 +22,13 @@ class ConnectionOperations {
     private val rabbitClient: RabbitMQClient by inject(RabbitMQClient::class.java)
 
     /**
-     * Adds a new connection to the configuration storage.
+     * Adds a new [ConnectionInfo] to the configuration storage.
      *
-     * @param connection Connection to be added
+     * @param connection [ConnectionInfo] to be added
      * @return true if the operation was successful, false otherwise
      */
     fun addConnection(
-        connection: Connection
+        connection: ConnectionInfo
     ): Boolean {
         if (rabbitClient.testConnection(connection).not())
             return false
@@ -42,9 +42,9 @@ class ConnectionOperations {
     }
 
     /**
-     * Removes a connection from the configuration storage.
+     * Removes a [ConnectionInfo] from the configuration storage.
      *
-     * @param id ID of the connection to be removed
+     * @param id ID of the [ConnectionInfo] to be removed
      * @return true if the operation was successful, false otherwise
      */
     fun removeConnection(id: String): Boolean {
@@ -68,33 +68,33 @@ class ConnectionOperations {
     }
 
     /**
-     * Lists all connections saved in the configuration storage.
+     * Lists all [ConnectionInfo] saved in the configuration storage.
      *
-     * @return List of connections
+     * @return List of [ConnectionInfo]
      */
     fun listConnections() =
         configStore.listConnections()
 
     /**
-     * Gets a connection by its name.
+     * Gets a [ConnectionInfo] by its name.
      *
      * @param name Name of the connection
-     * @return The connection or null if it does not exist
+     * @return The [ConnectionInfo] or null if it does not exist
      */
     fun getConnectionByName(name: String) =
         configStore.listConnections().find { it.name == name }
 
     /**
-     * Gets the default connection.
+     * Gets the default [ConnectionInfo].
      *
-     * @return The default connection or null if it does not exist
+     * @return The default [ConnectionInfo] or null if it does not exist
      */
     fun getDefaultConnection() =
         configStore.getDefaultConnection()
 
 
     /**
-     * Sets the default connection by its ID.
+     * Sets the default [ConnectionInfo] by its ID.
      *
      * @param id ID of the connection
      * @return true if the operation was successful, false otherwise
@@ -111,14 +111,14 @@ class ConnectionOperations {
     }
 
     /**
-     * Gets a connection by its ID.
+     * Gets a [ConnectionInfo] by its ID.
      *
      * @param id ID of the connection
-     * @return The connection or null if it does not exist
+     * @return The [ConnectionInfo] or null if it does not exist
      */
     fun getConnection(
         id: String
-    ): Connection? {
+    ): ConnectionInfo? {
         return configStore.getConnection(id)
     }
 }

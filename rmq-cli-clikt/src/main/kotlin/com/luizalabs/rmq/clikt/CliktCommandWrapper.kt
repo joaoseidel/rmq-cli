@@ -43,17 +43,18 @@ abstract class CliktCommandWrapper(
                         return null
                     }
 
+
                     return@let RabbitMQConnection(
                         connection = connection.connection,
                         channel = connection.channel,
-                        connectionInfo = connection.connectionInfo.copy(vHost = vHost)
+                        connectionInfo = connection.connectionInfo.withVHost(vHost)
                     )
                 }
 
                 connection
             } ?: run {
-                logger.error { "Failed to connect to RabbitMQ at ${connection.host}:${connection.port}" }
-                terminal.error("Failed to connect to RabbitMQ at ${connection.host}:${connection.port}")
+                logger.error { "Failed to connect to RabbitMQ at ${connection.toSecureString()}" }
+                terminal.error("Failed to connect to RabbitMQ through ${connection.name}")
                 return null
             }
 

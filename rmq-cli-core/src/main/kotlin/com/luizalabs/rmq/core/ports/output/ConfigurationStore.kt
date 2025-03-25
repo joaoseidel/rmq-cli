@@ -1,6 +1,6 @@
 ﻿package com.luizalabs.rmq.core.ports.output
 
-import com.luizalabs.rmq.core.domain.Connection
+import com.luizalabs.rmq.core.domain.ConnectionInfo
 
 /**
  * Interface for storing RabbitMQ connection configurations.
@@ -12,48 +12,48 @@ import com.luizalabs.rmq.core.domain.Connection
 interface ConfigurationStore {
 
     /**
-     * Saves a connection in storage.
+     * Saves a [ConnectionInfo] in storage.
      *
-     * @param connection Connection to be saved
+     * @param [ConnectionInfo] Connection to be saved
      * @return true if the operation was successful, false otherwise
      */
-    fun saveConnection(connection: Connection): Boolean
+    fun saveConnection(connection: ConnectionInfo): Boolean
 
     /**
-     * Retrieves a connection from storage.
+     * Retrieves a [ConnectionInfo] from storage.
      *
-     * @param id Connection ID
-     * @return Connection object or null if not found
+     * @param id [ConnectionInfo.id]
+     * @return [ConnectionInfo] object or null if not found
      */
-    fun getConnection(id: String): Connection?
+    fun getConnection(id: String): ConnectionInfo?
 
     /**
-     * Lists all connections stored.
+     * Lists all [ConnectionInfo] stored.
      *
-     * @return List of connections
+     * @return List of [ConnectionInfo]
      */
-    fun listConnections(): List<Connection>
+    fun listConnections(): List<ConnectionInfo>
 
     /**
-     * Removes a connection from storage.
+     * Removes a [ConnectionInfo] from storage.
      *
-     * @param id Connection ID
+     * @param id [ConnectionInfo.id]
      * @return true if the operation was successful, false otherwise
      */
     fun removeConnection(id: String): Boolean
 
     /**
-     * Sets a connection as the default one.
+     * Sets a [ConnectionInfo] as the default one.
      *
-     * @param id Connection ID
+     * @param id [ConnectionInfo.id]
      * @return true if the operation was successful, false otherwise
      */
     fun setDefaultConnection(id: String): Boolean
 
     /**
-     * Retrieves the default connection.
+     * Retrieves the default [ConnectionInfo].
      *
-     * @return Connection object or null if not found
+     * @return [ConnectionInfo] object or null if not found
      */
-    fun getDefaultConnection(): Connection?
+    fun getDefaultConnection(): ConnectionInfo?
 }

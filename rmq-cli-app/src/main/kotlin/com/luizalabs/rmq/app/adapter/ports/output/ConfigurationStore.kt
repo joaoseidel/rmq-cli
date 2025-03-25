@@ -1,6 +1,6 @@
 ﻿package com.luizalabs.rmq.app.adapter.ports.output
 
-import com.luizalabs.rmq.core.domain.Connection
+import com.luizalabs.rmq.core.domain.ConnectionInfo
 import com.luizalabs.rmq.core.ports.output.ConfigurationStore
 import com.luizalabs.rmq.core.ports.output.SettingsStore
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -20,13 +20,13 @@ class ConfigurationStore(
         const val CONNECTION_COLLECTION = "connections"
     }
 
-    override fun saveConnection(connection: Connection): Boolean {
+    override fun saveConnection(connection: ConnectionInfo): Boolean {
         return try {
             if (connection.isDefault) {
                 updateDefaultConnectionFlag(connection.id)
             }
 
-            settingsStore.save(CONNECTION_COLLECTION, connection, Connection::class)
+            settingsStore.save(CONNECTION_COLLECTION, connection, ConnectionInfo::class)
             true
         } catch (e: Exception) {
             logger.error { "Failed to save connection: ${e.message}" }
@@ -34,18 +34,18 @@ class ConfigurationStore(
         }
     }
 
-    override fun getConnection(id: String): Connection? {
+    override fun getConnection(id: String): ConnectionInfo? {
         return try {
-            settingsStore.findById(CONNECTION_COLLECTION, id, Connection::class)
+            settingsStore.findById(CONNECTION_COLLECTION, id, ConnectionInfo::class)
         } catch (e: Exception) {
             logger.error { "Failed to get connection: ${e.message}" }
             null
         }
     }
 
-    override fun listConnections(): List<Connection> {
+    override fun listConnections(): List<ConnectionInfo> {
         return try {
-            settingsStore.list(CONNECTION_COLLECTION, Connection::class)
+            settingsStore.list(CONNECTION_COLLECTION, ConnectionInfo::class)
         } catch (e: Exception) {
             logger.error { "Failed to list connections: ${e.message}" }
             emptyList()
@@ -82,7 +82,7 @@ class ConfigurationStore(
         }
     }
 
-    override fun getDefaultConnection(): Connection? {
+    override fun getDefaultConnection(): ConnectionInfo? {
         return try {
             val connections = listConnections()
             connections.find { it.isDefault } ?: connections.firstOrNull()
@@ -97,11 +97,9 @@ class ConfigurationStore(
 
         for (connection in connections) {
             if (connection.id == defaultConnectionId && !connection.isDefault) {
-                val updatedConnection = connection.copy(isDefault = true)
-                settingsStore.update(CONNECTION_COLLECTION, updatedConnection)
+                settingsStore.update(CONNECTION_COLLECTION, connection.withIsDefault(true))
             } else if (connection.id != defaultConnectionId && connection.isDefault) {
-                val updatedConnection = connection.copy(isDefault = false)
-                settingsStore.update(CONNECTION_COLLECTION, updatedConnection)
+                settingsStore.update(CONNECTION_COLLECTION, connection.withIsDefault(false))
             }
         }
     }
