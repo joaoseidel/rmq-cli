@@ -61,7 +61,7 @@ class MessageOperations {
 
     /**
      * Finds a message by its ID in a queue.
-     *
+
      * @param messageId ID of the message to find
      * @param queueName Name of the queue
      * @param connection Connection to use
@@ -74,29 +74,31 @@ class MessageOperations {
     ) = rabbitClient.findMessage(
         messageId = messageId,
         queueName = queueName,
+        autoAck = false,
         connection = connection
     )
 
     /**
      * Searches for messages in queues that match a pattern.
      *
-     *
      * @param pattern Pattern to search for (supports glob patterns)
-     * @param queueName Name of the queue to search in (optional, if not provided, searches in all queues)
+     * @param queueName Specific queue name (exact)
+     * @param queueNamePattern Pattern to filter queues by name (supports glob patterns)
      * @param count Maximum number of messages to search
      * @param connection Connection to use
      * @return List of messages that match the pattern
      */
     fun searchMessages(
         pattern: String,
-        queueName: String?,
+        queueName: String? = null,
+        queueNamePattern: String? = null,
         count: Int = 100,
         connection: RabbitMQConnection
     ): List<Message> {
         val queues = if (queueName != null) {
             listOf(queueName)
         } else {
-            rabbitClient.listQueues(connection).map { it.name }
+            rabbitClient.listQueuesByPattern(queueNamePattern ?: "*", connection).map { it.name }
         }
 
         val regex = pattern.toGlobRegex()
@@ -130,6 +132,59 @@ class MessageOperations {
     }
 
     /**
+     * Searches for messages in queues that match a pattern.
+     *
+     * @param messagePattern Pattern to search for (supports glob patterns)
+     * @param queuePattern Pattern to filter queues by name (supports glob patterns)
+     * @param messageLimit Maximum number of messages to search
+     * @param ack Whether to acknowledge the messages
+     * @param connection Connection to use
+     * @return List of messages that match the pattern
+     */
+    fun searchMessagesInQueuesByPattern(
+        messagePattern: String,
+        queuePattern: String,
+        messageLimit: Int = 100,
+        ack: Boolean = false,
+        connection: RabbitMQConnection
+    ): List<Message> {
+        val matchingQueues = rabbitClient.listQueuesByPattern(queuePattern, connection)
+
+        if (matchingQueues.isEmpty()) {
+            return emptyList()
+        }
+
+        val messageRegex = messagePattern.toGlobRegex()
+        val matchingMessages = mutableListOf<Message>()
+
+        for (queue in matchingQueues) {
+            val messages = rabbitClient.getMessages(
+                queueName = queue.name,
+                count = messageLimit,
+                ack = ack,
+                connection = connection
+            )
+
+            for (message in messages) {
+                try {
+                    val bodyText = message.bodyAsString()
+
+                    if (messageRegex.containsMatchIn(bodyText) ||
+                        messageRegex.containsMatchIn(message.id ?: "")
+                    ) {
+                        matchingMessages.add(message)
+                    }
+                } catch (e: Exception) {
+                    logger.warn { "Message with ID ${message.id} ignored: ${e.message}" }
+                }
+            }
+        }
+
+        return matchingMessages
+    }
+
+
+    /**
      * Gets messages from a queue.
      *
      * @param queueName Name of the queue
@@ -149,6 +204,41 @@ class MessageOperations {
         ack = ack,
         connection = connection
     )
+
+    /**
+     * Gets messages from queues that match a pattern.
+     *
+     * @param queueNamePattern Pattern to filter queues by name (supports glob patterns)
+     * @param messageLimit Maximum number of messages to get
+     * @param ack Whether to acknowledge the messages
+     * @param connection Connection to use
+     * @return List of messages
+     */
+    fun getMessagesFromQueuesByPattern(
+        queueNamePattern: String,
+        messageLimit: Int = 100,
+        ack: Boolean = false,
+        connection: RabbitMQConnection
+    ): List<Message> {
+        val matchingQueues = rabbitClient.listQueuesByPattern(queueNamePattern, connection)
+
+        if (matchingQueues.isEmpty()) {
+            return emptyList()
+        }
+
+        val allMessages = mutableListOf<Message>()
+        for (queue in matchingQueues) {
+            val messages = rabbitClient.getMessages(
+                queueName = queue.name,
+                count = messageLimit,
+                ack = ack,
+                connection = connection
+            )
+            allMessages.addAll(messages)
+        }
+
+        return allMessages
+    }
 
     /**
      * Reprocesses a message by publishing it to its original exchange.

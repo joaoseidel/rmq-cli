@@ -28,11 +28,25 @@ class QueueOperations {
      * Lists all queues in a specific Virtual Host.
      *
      * @param connection The connection to use
-     * @return List of queues or empty list in case of error
+     * @param pattern Optional filter pattern (glob syntax: * and ?)
+     * @return List of queues matching the pattern or all queues if no pattern provided
      */
     fun listQueues(
+        connection: RabbitMQConnection,
+        pattern: String? = null
+    ) = rabbitClient.listQueues(pattern, connection)
+
+    /**
+     * Searches for queues that match a name pattern.
+     *
+     * @param pattern Pattern to filter queue names (supports glob: *, ?)
+     * @param connection The connection to use
+     * @return List of queues that match the pattern
+     */
+    fun searchQueues(
+        pattern: String,
         connection: RabbitMQConnection
-    ) = rabbitClient.listQueues(connection)
+    ) = rabbitClient.listQueuesByPattern(pattern, connection)
 
     /**
      * Gets detailed information about a specific queue.
@@ -105,22 +119,6 @@ class QueueOperations {
         queueName: String,
         connection: RabbitMQConnection
     ) = rabbitClient.purgeQueue(queueName, connection)
-
-    /**
-     * Searches for queues that match a name pattern.
-     *
-     * @param pattern Pattern to filter queue names (supports glob: *, ?)
-     * @param connection The connection to use
-     * @return List of queues that match the pattern
-     */
-    fun searchQueues(
-        pattern: String,
-        connection: RabbitMQConnection
-    ): List<Queue> {
-        val queues = rabbitClient.listQueues(connection)
-        val regex = pattern.toGlobRegex()
-        return queues.filter { regex.matches(it.name) }
-    }
 
     /**
      * Consumes messages from a queue in real-time.
