@@ -8,7 +8,7 @@ dependencies {
     compileOnly(libs.bundles.kotlinxEcosystem)
     compileOnly(libs.bundles.logging)
     compileOnly(libs.bundles.koin)
-    compileOnly(libs.rabbitMQ)
+    compileOnly(libs.bundles.rabbitMQ)
 
     ksp(libs.koinKsp)
 

@@ -21,7 +21,7 @@ dependencies {
     implementation(libs.bundles.logging)
     implementation(libs.bundles.clikt)
     implementation(libs.bundles.koin)
-    implementation(libs.rabbitMQ)
+    implementation(libs.bundles.rabbitMQ)
 
     ksp(libs.koinKsp)
 
