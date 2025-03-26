@@ -1,3 +1,15 @@
+# [1.2.0](https://github.com/joaoseidel/rmq-cli/compare/v1.1.0...v1.2.0) (2025-03-26)
+
+
+### Bug Fixes
+
+* update parameter name in getMessages method for clarity ([babdcfa](https://github.com/joaoseidel/rmq-cli/commit/babdcfaf0381cb6d860457bace27bb78e3282f41))
+
+
+### Features
+
+* introduce CompositeMessageId for improved message identification and handling ([59afbe4](https://github.com/joaoseidel/rmq-cli/commit/59afbe4f8805b8d2e129604b4ff0dff131150daf))
+
 # [1.1.0](https://github.com/joaoseidel/rmq-cli/compare/v1.0.0...v1.1.0) (2025-03-25)
 
 
