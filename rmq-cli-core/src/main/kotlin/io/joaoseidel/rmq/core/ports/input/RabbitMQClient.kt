@@ -11,6 +11,7 @@ import io.joaoseidel.rmq.core.toGlobRegex
 import com.rabbitmq.http.client.Client
 import com.rabbitmq.http.client.ClientParameters
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
 
 private val logger = KotlinLogging.logger {}
 
@@ -110,7 +111,7 @@ interface RabbitMQClient {
      * @return Message if found, null otherwise
      */
     fun findMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         autoAck: Boolean,
         connection: RabbitMQConnection
@@ -129,7 +130,7 @@ interface RabbitMQClient {
      * @return Message if found, null otherwise
      */
     fun findMessageByPattern(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueNamePattern: String,
         autoAck: Boolean,
         connection: RabbitMQConnection
@@ -147,7 +148,7 @@ interface RabbitMQClient {
      * @return true if the operation was successful, false otherwise
      */
     fun deleteMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         connection: RabbitMQConnection
     ): Boolean

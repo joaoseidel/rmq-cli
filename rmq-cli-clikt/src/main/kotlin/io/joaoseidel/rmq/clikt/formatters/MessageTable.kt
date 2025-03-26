@@ -10,7 +10,7 @@ fun Message.toTable(terminal: Terminal, search: String = "") = table {
     borderType = BorderType.ASCII
 
     val search = search.removeGlob()
-    val highlightedId = id?.replace(search, terminal.theme.info(search)) ?: ""
+    val highlightedId = id.value.replace(search, terminal.theme.info(search))
     val highlightedPayload = bodyAsString().replace(search, terminal.theme.info(search))
     header { row("ID", "Exchange", "Routing key", "Queue", "Payload", "Properties") }
     body { row(highlightedId, exchange, routingKey, queue, highlightedPayload, properties) }
@@ -23,7 +23,7 @@ fun List<Message>.toTable(terminal: Terminal, search: String = "") = table {
     body {
         forEach {
             val search = search.removeGlob()
-            val highlightedId = it.id?.replace(search, terminal.theme.info(search)) ?: ""
+            val highlightedId = it.id.value.replace(search, terminal.theme.info(search))
             val highlightedPayload = it.bodyAsString().replace(search, terminal.theme.info(search))
             row(highlightedId, it.exchange, it.routingKey, it.queue, highlightedPayload, it.properties)
         }

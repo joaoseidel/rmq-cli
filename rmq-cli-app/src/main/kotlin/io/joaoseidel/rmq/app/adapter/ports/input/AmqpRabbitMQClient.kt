@@ -1,17 +1,18 @@
 ﻿package io.joaoseidel.rmq.app.adapter.ports.input
 
+import com.rabbitmq.client.AMQP
+import com.rabbitmq.client.CancelCallback
+import com.rabbitmq.client.ConnectionFactory
+import com.rabbitmq.client.DeliverCallback
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.joaoseidel.rmq.core.domain.CancellationCallback
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import io.joaoseidel.rmq.core.domain.ConnectionInfo
 import io.joaoseidel.rmq.core.domain.ConnectionInfo.AmqpConnectionInfo
 import io.joaoseidel.rmq.core.domain.Message
 import io.joaoseidel.rmq.core.domain.MessageCallback
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
-import com.rabbitmq.client.AMQP
-import com.rabbitmq.client.CancelCallback
-import com.rabbitmq.client.ConnectionFactory
-import com.rabbitmq.client.DeliverCallback
-import io.github.oshai.kotlinlogging.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
@@ -88,10 +89,19 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
                 val response = channel.basicGet(queueName, ack) ?: break
                 val envelope = response.envelope
                 val props = response.props
+
+                val messageId = CompositeMessageId.create(
+                    deliveryTagOrCount = envelope.deliveryTag.toString(),
+                    queue = queueName,
+                    exchange = envelope.exchange,
+                    routingKey = envelope.routingKey,
+                    payload = response.body
+                )
+
                 val headersMap = props.headers?.mapValues { it.value.toString() } ?: emptyMap()
 
                 val message = Message(
-                    id = props.messageId ?: response.envelope.deliveryTag.toString(),
+                    id = messageId,
                     payload = response.body,
                     queue = queueName,
                     exchange = envelope.exchange,
@@ -110,7 +120,7 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
     }
 
     override fun deleteMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         connection: RabbitMQConnection
     ): Boolean {
@@ -177,13 +187,22 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
 
             val deliverCallback = DeliverCallback { consumerTag, delivery ->
                 val headersMap = delivery.properties.headers?.mapValues { it.value.toString() } ?: emptyMap()
+                val envelope = delivery.envelope
+
+                val messageId = CompositeMessageId.create(
+                    deliveryTagOrCount = envelope.deliveryTag.toString(),
+                    queue = queueName,
+                    exchange = envelope.exchange,
+                    routingKey = envelope.routingKey,
+                    payload = delivery.body
+                )
 
                 val message = Message(
-                    id = delivery.properties.messageId ?: delivery.envelope.deliveryTag.toString(),
+                    id = messageId,
                     payload = delivery.body,
                     queue = queueName,
-                    exchange = delivery.envelope.exchange,
-                    routingKey = delivery.envelope.routingKey,
+                    exchange = envelope.exchange,
+                    routingKey = envelope.routingKey,
                     properties = headersMap
                 )
 

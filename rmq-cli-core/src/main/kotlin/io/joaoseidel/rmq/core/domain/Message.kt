@@ -20,8 +20,8 @@ import kotlinx.serialization.encoding.Encoder
  */
 @Serializable
 data class Message(
-    val id: String? = null,
-    val queue: String? = null,
+    val id: CompositeMessageId,
+    val queue: String? = "",
     val exchange: String = "",
     val routingKey: String = "",
     val properties: Map<String, String> = emptyMap(),

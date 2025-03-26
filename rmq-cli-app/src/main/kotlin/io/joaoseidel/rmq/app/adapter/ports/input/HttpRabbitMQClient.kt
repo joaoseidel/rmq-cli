@@ -1,16 +1,17 @@
 package io.joaoseidel.rmq.app.adapter.ports.input
 
-import io.joaoseidel.rmq.core.domain.CancellationCallback
-import io.joaoseidel.rmq.core.domain.ConnectionInfo
-import io.joaoseidel.rmq.core.domain.Message
-import io.joaoseidel.rmq.core.domain.MessageCallback
-import io.joaoseidel.rmq.core.domain.RabbitMQConnection
-import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
 import com.rabbitmq.http.client.GetAckMode.ACK_REQUEUE_FALSE
 import com.rabbitmq.http.client.GetAckMode.NACK_REQUEUE_TRUE
 import com.rabbitmq.http.client.GetEncoding
 import com.rabbitmq.http.client.domain.OutboundMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.joaoseidel.rmq.core.domain.CancellationCallback
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
+import io.joaoseidel.rmq.core.domain.ConnectionInfo
+import io.joaoseidel.rmq.core.domain.Message
+import io.joaoseidel.rmq.core.domain.MessageCallback
+import io.joaoseidel.rmq.core.domain.RabbitMQConnection
+import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
 import kotlin.text.Charsets.UTF_8
 
 private val logger = KotlinLogging.logger {}
@@ -62,10 +63,18 @@ internal class HttpRabbitMQClient : RabbitMQClient {
 
             val messageList = client.get(vHostName, queueName, count, ackMode, GetEncoding.AUTO)
                 ?.map {
+                    val messageId = CompositeMessageId.create(
+                        deliveryTagOrCount = it.messageCount.toString(),
+                        queue = queueName,
+                        exchange = "", // Not available in the HTTP API
+                        routingKey = it.routingKey ?: "",
+                        payload = it.payload.toByteArray()
+                    )
+
                     Message(
-                        id = "it.properties",
-                        exchange = "it.exchange",
-                        routingKey = it.routingKey,
+                        id = messageId,
+                        exchange = "", // Not available in the HTTP API
+                        routingKey = it.routingKey ?: "",
                         payload = it.payload.toByteArray(),
                         properties = emptyMap()
                     )
@@ -80,7 +89,7 @@ internal class HttpRabbitMQClient : RabbitMQClient {
     }
 
     override fun deleteMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         connection: RabbitMQConnection
     ): Boolean {

@@ -5,6 +5,7 @@ import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
 import io.joaoseidel.rmq.core.toGlobRegex
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import org.koin.core.annotation.Singleton
 import org.koin.java.KoinJavaComponent.inject
 
@@ -68,7 +69,7 @@ class MessageOperations {
      * @return Message if found, null otherwise
      */
     fun findMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         connection: RabbitMQConnection
     ) = rabbitClient.findMessage(
@@ -118,7 +119,7 @@ class MessageOperations {
 
                     if (
                         regex.containsMatchIn(bodyText) ||
-                        regex.containsMatchIn(message.id ?: "")
+                        regex.containsMatchIn(message.id.value)
                     ) {
                         matchingMessages.add(message)
                     }
@@ -170,7 +171,7 @@ class MessageOperations {
                     val bodyText = message.bodyAsString()
 
                     if (messageRegex.containsMatchIn(bodyText) ||
-                        messageRegex.containsMatchIn(message.id ?: "")
+                        messageRegex.containsMatchIn(message.id.value)
                     ) {
                         matchingMessages.add(message)
                     }
@@ -288,7 +289,7 @@ class MessageOperations {
      * @return true if successful, false otherwise
      */
     fun deleteMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         connection: RabbitMQConnection
     ) = rabbitClient.deleteMessage(

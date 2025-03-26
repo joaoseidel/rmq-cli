@@ -1,6 +1,7 @@
 package io.joaoseidel.rmq.app.adapter.ports.input
 
 import io.joaoseidel.rmq.core.domain.CancellationCallback
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import io.joaoseidel.rmq.core.domain.ConnectionInfo
 import io.joaoseidel.rmq.core.domain.MessageCallback
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
@@ -45,7 +46,7 @@ class RabbitMQClient : RabbitMQClient {
     }
 
     override fun deleteMessage(
-        messageId: String,
+        messageId: CompositeMessageId,
         queueName: String,
         connection: RabbitMQConnection
     ) = when (connection.connectionInfo) {
