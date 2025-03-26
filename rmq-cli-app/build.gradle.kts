@@ -33,6 +33,14 @@ ksp {
     arg("KOIN_DEFAULT_MODULE", "false")
 }
 
+// Distributions configuration (JVM and Native)
+
+tasks.named<Zip>("distZip") {
+    archiveBaseName.set("rmq")
+    archiveClassifier.set("jvm")
+    archiveVersion.set("")
+}
+
 graalvmNative {
     toolchainDetection.set(true)
 

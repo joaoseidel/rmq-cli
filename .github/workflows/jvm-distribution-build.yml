@@ -1,0 +1,55 @@
+name: Gradle JVM Distribution Build
+
+on:
+  release:
+    types: [ released ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-distribution:
+    name: Build JVM Distribution
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '23'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'false'
+          cache: 'gradle'
+
+      - name: Build with Gradle
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :rmq-cli-app:distZip
+
+      - name: Rename distribution ZIP
+        run: |
+          SOURCE_ZIP=$(find rmq-cli-app/build/distributions -name "*.zip" -type f)
+          FILENAME=$(basename "$SOURCE_ZIP")
+          VERSION=${GITHUB_REF_NAME#v}
+          DEST_ZIP="rmq-cli-jvm-$VERSION.zip"
+          cp "$SOURCE_ZIP" "$DEST_ZIP"
+          echo "DIST_ZIP=$DEST_ZIP" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-distribution
+          path: ${{ env.DIST_ZIP }}
+          retention-days: 1
+
+      - name: Attach to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.DIST_ZIP }}
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
