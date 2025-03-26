@@ -1,6 +1,18 @@
 {
   "reflection": [
     {
+      "type": "[Lcom.fasterxml.jackson.databind.deser.Deserializers;"
+    },
+    {
+      "type": "[Lcom.rabbitmq.http.client.domain.InboundMessage;"
+    },
+    {
+      "type": "[Lcom.rabbitmq.http.client.domain.QueueInfo;"
+    },
+    {
+      "type": "[Lcom.rabbitmq.http.client.domain.VhostInfo;"
+    },
+    {
       "type": "[Ljava.lang.Object;"
     },
     {
@@ -103,7 +115,13 @@
       "type": "ch.qos.logback.core.spi.ContextAware"
     },
     {
-      "type": "com.github.ajalt.mordant.terminal.terminalinterface.ffm.TerminalInterfaceProviderFfm"
+      "type": "com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "com.github.ajalt.mordant.terminal.terminalinterface.jna.TerminalInterfaceProviderJna"
@@ -142,7 +160,561 @@
       ]
     },
     {
-      "type": "com.github.ajalt.mordant.terminal.terminalinterface.nativeimage.TerminalInterfaceProviderNativeImage"
+      "type": "com.rabbitmq.http.client.domain.ConsumerDetails",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.InboundMessage",
+      "allDeclaredFields": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setMessageCount",
+          "parameterTypes": [
+            "int"
+          ]
+        },
+        {
+          "name": "setPayload",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setPayloadBytes",
+          "parameterTypes": [
+            "int"
+          ]
+        },
+        {
+          "name": "setPayloadEncoding",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setProperties",
+          "parameterTypes": [
+            "java.util.Map"
+          ]
+        },
+        {
+          "name": "setRedelivered",
+          "parameterTypes": [
+            "boolean"
+          ]
+        },
+        {
+          "name": "setRoutingKey",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.MessageStats",
+      "allDeclaredFields": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setAck",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setAckDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setBasicDeliver",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setBasicDeliverDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setBasicDeliverNoAck",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setBasicDeliverNoAckDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setBasicGet",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setBasicGetDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setBasicGetNoAck",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setBasicGetNoAckDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setBasicPublish",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setBasicPublishDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setBasicReturn",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setBasicReturnDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setGetCounter",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setGetDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setPublisherConfirm",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setPublisherConfirmDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setRedeliver",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setRedeliverDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.OwnerPidDetails",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.QueueDetails",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.QueueInfo",
+      "allDeclaredFields": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setArguments",
+          "parameterTypes": [
+            "java.util.Map"
+          ]
+        },
+        {
+          "name": "setAutoDelete",
+          "parameterTypes": [
+            "boolean"
+          ]
+        },
+        {
+          "name": "setConsumerCount",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setDurable",
+          "parameterTypes": [
+            "boolean"
+          ]
+        },
+        {
+          "name": "setEffectivePolicyDefinition",
+          "parameterTypes": [
+            "java.util.Map"
+          ]
+        },
+        {
+          "name": "setExclusive",
+          "parameterTypes": [
+            "boolean"
+          ]
+        },
+        {
+          "name": "setMemoryUsed",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessageBytes",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessageBytesPersistent",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessageBytesRAM",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessageBytesReady",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessageBytesUnacknowledged",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessageStats",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.MessageStats"
+          ]
+        },
+        {
+          "name": "setMessagesDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setMessagesReady",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessagesReadyDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setMessagesUnacknowledged",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessagesUnacknowledgedDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setName",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setNode",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setState",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setTotalMessages",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setTotalPersistentMessages",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setTotalTransientMessages",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setType",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setVhost",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.RateDetails",
+      "allDeclaredFields": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "double",
+            "double",
+            "double",
+            "java.util.List"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.Sample",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "com.rabbitmq.http.client.domain.VhostInfo",
+      "allDeclaredFields": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setClusterState",
+          "parameterTypes": [
+            "java.util.Map"
+          ]
+        },
+        {
+          "name": "setDescription",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setMessageStats",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.MessageStats"
+          ]
+        },
+        {
+          "name": "setMessages",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessagesDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setMessagesReady",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessagesReadyDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setMessagesUnacknowledged",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setMessagesUnacknowledgedDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setName",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "setOctetsReceived",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setOctetsReceivedDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setOctetsSent",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "setOctetsSentDetails",
+          "parameterTypes": [
+            "com.rabbitmq.http.client.domain.RateDetails"
+          ]
+        },
+        {
+          "name": "setTags",
+          "parameterTypes": [
+            "java.util.List"
+          ]
+        },
+        {
+          "name": "setTracing",
+          "parameterTypes": [
+            "boolean"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.AESCipher$General",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.ARCFOURCipher",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.ChaCha20Cipher$ChaCha20Poly1305",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.DESCipher",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.DESedeCipher",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHParameters",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.GaloisCounterMode$AESGCM",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.TlsMasterSecretGenerator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "com.sun.jna.CallbackProxy"
@@ -177,7 +749,58 @@
       ]
     },
     {
+      "type": "io.joaoseidel.rmq.core.domain.ConnectionInfo$AmqpConnectionInfo",
+      "fields": [
+        {
+          "name": "Companion"
+        }
+      ]
+    },
+    {
+      "type": "io.joaoseidel.rmq.core.domain.ConnectionInfo$AmqpConnectionInfo$Companion",
+      "methods": [
+        {
+          "name": "serializer",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.joaoseidel.rmq.core.domain.ConnectionInfo$Companion",
+      "methods": [
+        {
+          "name": "serializer",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.joaoseidel.rmq.core.domain.ConnectionInfo$HttpConnectionInfo",
+      "fields": [
+        {
+          "name": "Companion"
+        }
+      ]
+    },
+    {
+      "type": "io.joaoseidel.rmq.core.domain.ConnectionInfo$HttpConnectionInfo$Companion",
+      "methods": [
+        {
+          "name": "serializer",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.joaoseidel.rmq.core.domain.Message",
+      "fields": [
+        {
+          "name": "Companion"
+        }
+      ]
+    },
+    {
+      "type": "io.joaoseidel.rmq.core.domain.Message$Companion",
       "methods": [
         {
           "name": "serializer",
@@ -190,6 +813,14 @@
     },
     {
       "type": "java.lang.Object"
+    },
+    {
+      "type": "java.lang.Thread",
+      "fields": [
+        {
+          "name": "threadLocalRandomProbe"
+        }
+      ]
     },
     {
       "type": "java.lang.Throwable"
@@ -219,12 +850,46 @@
       "type": "java.nio.Buffer"
     },
     {
+      "type": "java.security.AlgorithmParametersSpi"
+    },
+    {
+      "type": "java.security.KeyStoreSpi"
+    },
+    {
+      "type": "java.util.List"
+    },
+    {
+      "type": "java.util.concurrent.ForkJoinTask",
+      "fields": [
+        {
+          "name": "aux"
+        },
+        {
+          "name": "status"
+        }
+      ]
+    },
+    {
       "type": "java.util.concurrent.atomic.AtomicBoolean",
       "fields": [
         {
           "name": "value"
         }
       ]
+    },
+    {
+      "type": "java.util.concurrent.atomic.Striped64",
+      "fields": [
+        {
+          "name": "base"
+        },
+        {
+          "name": "cellsBusy"
+        }
+      ]
+    },
+    {
+      "type": "jdk.internal.misc.Unsafe"
     },
     {
       "type": "kotlin.Metadata",
@@ -272,6 +937,9 @@
       ]
     },
     {
+      "type": "kotlin.collections.List"
+    },
+    {
       "type": "kotlin.jvm.internal.DefaultConstructorMarker"
     },
     {
@@ -293,6 +961,24 @@
       "type": "kotlin.reflect.jvm.internal.impl.load.java.JavaIncompatibilityRulesOverridabilityCondition"
     },
     {
+      "type": "sun.security.pkcs12.PKCS12KeyStore",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.pkcs12.PKCS12KeyStore$DualFormatPKCS12",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "sun.security.provider.DRBG",
       "methods": [
         {
@@ -300,6 +986,24 @@
           "parameterTypes": [
             "java.security.SecureRandomParameters"
           ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.DSA$SHA224withDSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.DSA$SHA256withDSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
         }
       ]
     },
@@ -313,11 +1017,254 @@
       ]
     },
     {
+      "type": "sun.security.provider.SHA2$SHA224",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "sun.security.provider.SHA2$SHA256",
       "methods": [
         {
           "name": "<init>",
           "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA5$SHA384",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA5$SHA512",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.X509Factory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.PSSParameters",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSAKeyFactory$Legacy",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSAPSSSignature",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSASignature$SHA224withRSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.ssl.KeyManagerFactoryImpl$SunX509",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.ssl.SSLContextImpl$DefaultSSLContext",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.ssl.TrustManagerFactoryImpl$PKIXFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.AuthorityInfoAccessExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.AuthorityKeyIdentifierExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.BasicConstraintsExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.CRLDistributionPointsExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.CertificatePoliciesExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.ExtendedKeyUsageExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.IssuerAlternativeNameExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.KeyUsageExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.NetscapeCertTypeExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.PrivateKeyUsageExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.SubjectAlternativeNameExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.SubjectKeyIdentifierExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -340,6 +1287,15 @@
       "glob": "META-INF/services/java.lang.System$LoggerFinder"
     },
     {
+      "glob": "META-INF/services/java.net.spi.InetAddressResolverProvider"
+    },
+    {
+      "glob": "META-INF/services/java.net.spi.URLStreamHandlerProvider"
+    },
+    {
+      "glob": "META-INF/services/java.nio.channels.spi.SelectorProvider"
+    },
+    {
       "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
     },
     {
@@ -358,6 +1314,9 @@
       "glob": "com/sun/jna/win32-x86-64/jnidispatch.dll"
     },
     {
+      "glob": "kotlin/collections/collections.kotlin_builtins"
+    },
+    {
       "glob": "logback-test.scmo"
     },
     {
@@ -368,6 +1327,9 @@
     },
     {
       "glob": "logback.xml"
+    },
+    {
+      "glob": "rabbitmq-amqp-client.properties"
     },
     {
       "module": "java.xml",
@@ -435,17 +1397,6 @@
     },
     {
       "type": "com.sun.jna.JNIEnv"
-    },
-    {
-      "type": "com.sun.jna.LastErrorException",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
     },
     {
       "type": "com.sun.jna.Native",

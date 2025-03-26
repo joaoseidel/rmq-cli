@@ -69,18 +69,12 @@ tasks.withType<BuildNativeImageTask> {
     dependsOn("processResources")
 }
 
-tasks.register<JavaExec>("runWithAgent") {
-    group = "application"
-    description = "Runs the application with the GraalVM tracing agent"
-
-    mainClass.set("io.joaoseidel.rmq.app.MainKt")
-    classpath = sourceSets["main"].runtimeClasspath
-
-//    jvmArgs = listOf(
-//        "-agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/native-image/io.joaoseidel.rmq/rmq-cli-app,config-write-period-secs=5,config-write-initial-delay-secs=5"
-//    )
-
-    args = listOf(
-        "connection", "list",
-    )
+graalvmNative {
+    agent {
+        modes {
+            direct {
+                options.add("config-output-dir=src/main/resources/META-INF/native-image")
+            }
+        }
+    }
 }
