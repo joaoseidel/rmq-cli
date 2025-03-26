@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/joaoseidel/rmq-cli/compare/v1.2.0...v1.2.1) (2025-03-26)
+
+
+### Bug Fixes
+
+* JSON serialization with polymorphic support for ConnectionInfo ([78cf0f7](https://github.com/joaoseidel/rmq-cli/commit/78cf0f7f9e04eb2358a8e0b6efeca9048050a1aa))
+
 # [1.2.0](https://github.com/joaoseidel/rmq-cli/compare/v1.1.0...v1.2.0) (2025-03-26)
 
 
