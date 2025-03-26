@@ -36,13 +36,13 @@ class RabbitMQClient : RabbitMQClient {
     }
 
     override fun getMessages(
-        queueNamePattern: String,
+        queueName: String,
         count: Int,
         ack: Boolean,
         connection: RabbitMQConnection
     ) = when (connection.connectionInfo) {
-        is ConnectionInfo.AmqpConnectionInfo -> amqpRabbitMQClient.getMessages(queueNamePattern, count, ack, connection)
-        is ConnectionInfo.HttpConnectionInfo -> httpRabbitMQClient.getMessages(queueNamePattern, count, ack, connection)
+        is ConnectionInfo.AmqpConnectionInfo -> amqpRabbitMQClient.getMessages(queueName, count, ack, connection)
+        is ConnectionInfo.HttpConnectionInfo -> httpRabbitMQClient.getMessages(queueName, count, ack, connection)
     }
 
     override fun deleteMessage(
