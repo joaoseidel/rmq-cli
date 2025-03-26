@@ -45,7 +45,7 @@ bin/
 .DS_Store
 
 ### RepoMix ###
-repomix-output.xml
+repomix-output.*
 
 ### Misc ###
 *.log

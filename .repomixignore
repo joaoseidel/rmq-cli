@@ -1,0 +1,14 @@
+# Ignore Gradle files
+gradle/wrapper/*
+gradlew
+gradlew.bat
+
+# Ignore Intellij
+.idea/*
+
+# Ignore repomix
+repomix.config.json
+.repomixignore
+
+# Ignore big files
+**reachability-metadata.json**
