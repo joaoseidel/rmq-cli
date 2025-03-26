@@ -46,14 +46,16 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          
           if [ "${{ runner.os }}" == "macOS" ]; then
-            zip -j rmq-mac.zip rmq-cli-app/build/native/nativeCompile/rmq
+            zip -j rmq-mac-$VERSION.zip rmq-cli-app/build/native/nativeCompile/rmq
             echo "ARTIFACT_NAME=mac" >> $GITHUB_ENV
-            echo "ZIP_NAME=rmq-mac.zip" >> $GITHUB_ENV
+            echo "ZIP_NAME=rmq-mac-$VERSION.zip" >> $GITHUB_ENV
           else
-            zip -j rmq-linux.zip rmq-cli-app/build/native/nativeCompile/rmq
+            zip -j rmq-linux-$VERSION.zip rmq-cli-app/build/native/nativeCompile/rmq
             echo "ARTIFACT_NAME=linux" >> $GITHUB_ENV
-            echo "ZIP_NAME=rmq-linux.zip" >> $GITHUB_ENV
+            echo "ZIP_NAME=rmq-linux-$VERSION.zip" >> $GITHUB_ENV
           fi
 
       # Create ZIP archive - Windows (using PowerShell)
@@ -61,7 +63,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ZipName = "rmq-windows.zip"
+          $VERSION = $env:GITHUB_REF_NAME -replace "^v", ""
+          
+          $ZipName = "rmq-windows-$VERSION.zip"
           $BinaryPath = "rmq-cli-app\build\native\nativeCompile\rmq.exe"
           
           # Create a new zip file
@@ -92,9 +96,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/windows/rmq-windows.zip
-            artifacts/mac/rmq-mac.zip
-            artifacts/linux/rmq-linux.zip
+            artifacts/windows/rmq-windows-*.zip
+            artifacts/mac/rmq-mac-*.zip
+            artifacts/linux/rmq-linux-*.zip
           tag_name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
