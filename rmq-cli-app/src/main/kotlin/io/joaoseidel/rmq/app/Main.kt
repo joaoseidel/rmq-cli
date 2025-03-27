@@ -23,5 +23,5 @@ suspend fun main(args: Array<String>) {
         logger.error { "An error occurred: ${e.message}" }
     }
 
-    exitProcess(1)
+    exitProcess(0)
 }
