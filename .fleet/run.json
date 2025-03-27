@@ -1,0 +1,74 @@
+{
+    "configurations": [
+        {
+            "type": "gradle",
+            "name": "clean build",
+            "tasks": [
+                "clean",
+                "build"
+            ]
+        },
+        {
+            "type": "gradle",
+            "name": "build nativeImage",
+            "dependsOn": [
+                "clean build"
+            ],
+            "tasks": [
+                "buildNative"
+            ]
+        },
+        {
+            "type": "gradle",
+            "name": "generate shadowJar",
+            "dependsOn": [
+                "clean build"
+            ],
+            "tasks": [
+                ":rmq-cli-app:shadowJar"
+            ]
+        },
+        {
+            "type": "gradle",
+            "name": "generate distZip",
+            "tasks": [
+                ":rmq-cli-app:distZip"
+            ]
+        },
+        {
+            "type": "java-source-run",
+            "name": "run with NativeImage Agent",
+            "dependsOn": [
+                "generate shadowJar"
+            ],
+            "sourceFile": "rmq-cli-app/build/libs/rmq-cli-app-0.1.0-SNAPSHOT-all.jar",
+            "options": [
+                "-jar",
+                "-agentlib:native-image-agent=config-merge-dir=.\\rmq-cli-app\\src\\main\\resources\\META-INF\\native-image\\io.joaoseidel.rmq\\rmq-cli-app"
+            ],
+            "args": [
+                "message",
+                "search",
+                "one",
+                "--global"
+            ]
+        },
+        {
+            "type": "java-source-run",
+            "name": "run app",
+            "dependsOn": [
+                "generate shadowJar"
+            ],
+            "sourceFile": "rmq-cli-app/build/libs/rmq-cli-app-0.1.0-SNAPSHOT-all.jar",
+            "options": [
+                "-jar"
+            ],
+            "args": [
+                "message",
+                "search",
+                "one",
+                "--global"
+            ]
+        }
+    ]
+}
