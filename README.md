@@ -1,12 +1,16 @@
 # RMQ-CLI
 
-A powerful command-line interface for interacting with RabbitMQ. Manage connections, queues, and messages with ease through a simple and intuitive command-line experience.
+A powerful command-line interface for interacting with RabbitMQ. Manage connections, queues, and messages with ease
+through a simple and intuitive command-line experience.
 
 ## Overview
 
-RMQ-CLI is a command-line tool written in Kotlin that provides comprehensive management capabilities for RabbitMQ message brokers. The tool follows a domain-driven design approach with a clean architecture, making it both powerful and maintainable.
+RMQ-CLI is a command-line tool written in Kotlin that provides comprehensive management capabilities for RabbitMQ
+message brokers. The tool follows a domain-driven design approach with a clean architecture, making it both powerful and
+maintainable.
 
-This project was born out of the need for advanced message handling capabilities that aren't available in the official RabbitMQ CLI. When working with complex messaging systems, I frequently needed to:
+This project was born out of the need for advanced message handling capabilities that aren't available in the official
+RabbitMQ CLI. When working with complex messaging systems, I frequently needed to:
 
 - Search for specific message content across multiple queues
 - Reprocess failed messages by republishing them to their original exchanges
@@ -14,7 +18,9 @@ This project was born out of the need for advanced message handling capabilities
 - Export messages from multiple queues for analysis and debugging
 - Filter queues using glob patterns to easily manage systems with many queues
 
-The official RabbitMQ CLI is excellent for basic administrative tasks, but it lacks these sophisticated message handling features that are essential for day-to-day operations in production environments. RMQ-CLI fills this gap by providing a rich set of commands specifically designed for message-level operations and advanced queue management.
+The official RabbitMQ CLI is excellent for basic administrative tasks, but it lacks these sophisticated message handling
+features that are essential for day-to-day operations in production environments. RMQ-CLI fills this gap by providing a
+rich set of commands specifically designed for message-level operations and advanced queue management.
 
 ## Features
 
@@ -28,7 +34,8 @@ The official RabbitMQ CLI is excellent for basic administrative tasks, but it la
 
 ### Download Pre-built Binary
 
-The easiest way to install RMQ-CLI is to download the pre-built binary for your platform from the [releases page](https://github.com/joaoseidel/rmq-cli/releases).
+The easiest way to install RMQ-CLI is to download the pre-built binary for your platform from
+the [releases page](https://github.com/joaoseidel/rmq-cli/releases).
 
 ### Build from Source
 
@@ -220,23 +227,26 @@ The RMQ-CLI supports basic glob patterns for searching queues and messages. Here
 - `?`: Matches exactly one character
 
 Note: The implementation converts glob patterns to regular expressions internally. Specifically, it:
+
 1. Escapes periods (`.` → `\.`)
 2. Converts asterisks (`*` → `.*`)
 3. Converts question marks (`?` → `.`)
 
-The code does not specifically implement character class support (`[abc]` or `[a-z]`), though these may work in some cases through the regular expression conversion.
+The code does not specifically implement character class support (`[abc]` or `[a-z]`), though these may work in some
+cases through the regular expression conversion.
 
 ### Examples
 
-| Pattern | Matches | Doesn't Match |
-|---------|---------|---------------|
-| `order*` | `order`, `orders`, `order-processing` | `my-order`, `reorder` |
-| `*event*` | `event`, `events`, `new-event-handler` | none |
-| `user-?` | `user-A`, `user-1` | `user-`, `user-admin` |
-| `????` | `user`, `test`, `1234` | `a`, `toolong` |
-| `*.error` | `app.error`, `system.error` | `error`, `system.error.log` |
+| Pattern   | Matches                                | Doesn't Match               |
+|-----------|----------------------------------------|-----------------------------|
+| `order*`  | `order`, `orders`, `order-processing`  | `my-order`, `reorder`       |
+| `*event*` | `event`, `events`, `new-event-handler` | none                        |
+| `user-?`  | `user-A`, `user-1`                     | `user-`, `user-admin`       |
+| `????`    | `user`, `test`, `1234`                 | `a`, `toolong`              |
+| `*.error` | `app.error`, `system.error`            | `error`, `system.error.log` |
 
-You can use these patterns with several commands including `queue list`, `queue search`, `message search`, and `queue export`.
+You can use these patterns with several commands including `queue list`, `queue search`, `message search`, and
+`queue export`.
 
 ## Connection Type Support
 
@@ -263,12 +273,14 @@ rmq connection add local-http --host localhost --username guest --password guest
 ```
 
 The HTTP connection is limited to management operations and does not support:
+
 - Real-time message consumption
 - Some advanced message handling operations
 
 ## Configuration
 
-RMQ-CLI stores connection settings in `~/.rmq-cli/settings.json`. These settings are managed automatically through the CLI commands.
+RMQ-CLI stores connection settings in `~/.rmq-cli/settings.json`. These settings are managed automatically through the
+CLI commands.
 
 ## Development
 
