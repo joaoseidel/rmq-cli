@@ -58,7 +58,7 @@ class Search : CliktCommandWrapper("search") {
                 terminal.warning("This operation may take some time and consume significant resources.")
                 terminal.warning("Are you sure you want to continue? (y/N)")
 
-                val response = readLine()?.lowercase()
+                val response = readlnOrNull()?.lowercase()
                 if (response != "y" && response != "yes") {
                     terminal.error("Operation cancelled.")
                     return@withConnection
@@ -88,7 +88,7 @@ class Search : CliktCommandWrapper("search") {
                 else -> {
                     messageOperations.searchMessagesInQueuesByPattern(
                         messagePattern = pattern,
-                        queuePattern = "*",
+                        queuePattern = ".",
                         messageLimit = limit ?: 100,
                         connection = connection
                     )
