@@ -31,8 +31,19 @@ class RabbitMQClient : RabbitMQClient {
         payload: ByteArray,
         connection: RabbitMQConnection
     ) = when (connection.connectionInfo) {
-        is ConnectionInfo.AmqpConnectionInfo -> amqpRabbitMQClient.publishMessage(exchangeName, routingKey, payload, connection)
-        is ConnectionInfo.HttpConnectionInfo -> httpRabbitMQClient.publishMessage(exchangeName, routingKey, payload, connection)
+        is ConnectionInfo.AmqpConnectionInfo -> amqpRabbitMQClient.publishMessage(
+            exchangeName,
+            routingKey,
+            payload,
+            connection
+        )
+
+        is ConnectionInfo.HttpConnectionInfo -> httpRabbitMQClient.publishMessage(
+            exchangeName,
+            routingKey,
+            payload,
+            connection
+        )
     }
 
     override fun getMessages(
