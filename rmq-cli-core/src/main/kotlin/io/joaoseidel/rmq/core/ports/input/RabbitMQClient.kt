@@ -7,9 +7,10 @@ import io.joaoseidel.rmq.core.domain.MessageCallback
 import io.joaoseidel.rmq.core.domain.Queue
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.domain.VHost
-import io.joaoseidel.rmq.core.toGlobRegex
 import com.rabbitmq.http.client.Client
 import com.rabbitmq.http.client.ClientParameters
+import com.rabbitmq.http.client.domain.QueryParameters
+import com.rabbitmq.http.client.domain.QueueInfo
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.joaoseidel.rmq.core.domain.CompositeMessageId
 
@@ -196,26 +197,52 @@ interface RabbitMQClient {
         connection: RabbitMQConnection
     ) = withHttpClient(connection.connectionInfo) { client ->
         try {
-            val queueList = client.queues
-                ?.map {
-                    Queue(
-                        name = it.name,
-                        vhost = it.vhost,
-                        messagesReady = it.messagesReady,
-                        messagesUnacknowledged = it.messagesUnacknowledged,
-                    )
-                }
-                ?.sortedBy { it.messagesReady + it.messagesUnacknowledged }
-                ?: emptyList()
+            val vHostName = connection.connectionInfo.vHost.name
+            val queueList = mutableListOf<QueueInfo>()
+            var queryParameters = QueryParameters()
 
-            if (pattern != null) {
-                val regex = pattern.toGlobRegex()
-                queueList.filter { regex.matches(it.name) }
-            } else {
-                queueList
+            // Setup necessary columns to work with the response
+            queryParameters
+                .columns()
+                .add("name")
+                .add("vhost")
+                .add("messages_ready")
+                .add("messages_unacknowledged")
+                .sort("messages_unacknowledged")
+                .sortReverse(true)
+
+            // Setup pagination
+            queryParameters
+                .pagination()
+                .pageSize(20)
+
+            // Setup pattern filtering
+            pattern?.let { queryParameters.name(pattern, true) }
+
+            // Paginate through all queues
+            var queuesPage = client.getQueues(vHostName, queryParameters)
+            queueList.addAll(queuesPage?.itemsAsList ?: emptyList())
+
+            while (queuesPage.pageCount > 1) {
+                queryParameters = queryParameters.pagination().nextPage(queuesPage).query()
+
+                queuesPage = client.getQueues(vHostName, queryParameters)
+                queuesPage.let { queueList.addAll(it.itemsAsList) }
+
+                if (queuesPage == null || queuesPage.page >= queuesPage.pageCount) break
+            }
+
+            // Convert to domain objects
+            queueList.map {
+                Queue(
+                    name = it.name,
+                    vhost = it.vhost,
+                    messagesReady = it.messagesReady,
+                    messagesUnacknowledged = it.messagesUnacknowledged,
+                )
             }
         } catch (e: Exception) {
-            logger.error { "Failed to list queues: ${e.message}" }
+            logger.error(e) { "Failed to list queues: ${e.message}" }
             emptyList()
         }
     }
