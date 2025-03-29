@@ -1,8 +1,8 @@
 ﻿package io.joaoseidel.rmq.app
 
 import com.github.ajalt.clikt.command.main
-import io.joaoseidel.rmq.clikt.RmqCliCommand
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.joaoseidel.rmq.clikt.RmqCliCommand
 import org.koin.core.context.startKoin
 import org.koin.ksp.generated.module
 import kotlin.system.exitProcess
@@ -20,7 +20,8 @@ suspend fun main(args: Array<String>) {
         val rootCommand = RmqCliCommand()
         rootCommand.main(args)
     } catch (e: Exception) {
-        logger.error { "An error occurred: ${e.message}" }
+        logger.error(e) { "An error occurred: ${e.message}" }
+        exitProcess(1)
     }
 
     exitProcess(0)
