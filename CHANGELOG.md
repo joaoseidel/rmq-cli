@@ -1,3 +1,24 @@
+# [1.3.0](https://github.com/joaoseidel/rmq-cli/compare/v1.2.1...v1.3.0) (2025-03-30)
+
+
+### Bug Fixes
+
+* error handling in Main.kt ([f9cbe48](https://github.com/joaoseidel/rmq-cli/commit/f9cbe488b298790059e756eaa29f8739cfd4fcc4))
+* exit code to indicate successful execution ([8ff7939](https://github.com/joaoseidel/rmq-cli/commit/8ff793976e5340fcd98c0521c96643251d5e0f48))
+* queue listing with correct default pattern ([8a63519](https://github.com/joaoseidel/rmq-cli/commit/8a635192c9569fe8628714055fa760713a509930))
+* update Search command input handling and default queue pattern ([bd9dbd2](https://github.com/joaoseidel/rmq-cli/commit/bd9dbd2175ff6926de7e3589f7fd23f425a3f796))
+* update ZIP file naming to include version in graalvm-native-build.yml ([66bb3cc](https://github.com/joaoseidel/rmq-cli/commit/66bb3cc45dd2e17358966b2235e7858ecb9965cb))
+
+
+### Features
+
+* add core domain models and interfaces for containment strategies for risky operations ([0922e37](https://github.com/joaoseidel/rmq-cli/commit/0922e371032ee7d0f6a5a021d223ada5c9b22b49))
+* add FlowSafeOperationCoordinator and JsonMessageBackupRepository ([7df3408](https://github.com/joaoseidel/rmq-cli/commit/7df34081e5517ca0ca336badd4b99a82ced8ead0))
+* add safe and unsafe modes for message and queue commands ([de767f0](https://github.com/joaoseidel/rmq-cli/commit/de767f05e93e9784e76331544ed412ed266a9d63))
+* add safeOperation flows to usecases ([3b7a44e](https://github.com/joaoseidel/rmq-cli/commit/3b7a44ee346bf9e14740fcfd2d4c74697b3d58c7))
+* add string utility functions for glob patterns and truncation ([86f47a5](https://github.com/joaoseidel/rmq-cli/commit/86f47a54b312344534d096213938de03253b0eba))
+* improve queue listing with pagination and filtering support ([a662a3e](https://github.com/joaoseidel/rmq-cli/commit/a662a3ece5bab1412444490a99dbd83b0215a987))
+
 ## [1.2.1](https://github.com/joaoseidel/rmq-cli/compare/v1.2.0...v1.2.1) (2025-03-26)
 
 
