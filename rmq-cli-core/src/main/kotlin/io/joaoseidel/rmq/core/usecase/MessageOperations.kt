@@ -1,4 +1,4 @@
-package io.joaoseidel.rmq.core.usecase
+﻿package io.joaoseidel.rmq.core.usecase
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.joaoseidel.rmq.core.domain.Message
@@ -99,11 +99,12 @@ class MessageOperations {
         count: Int = 100,
         connection: RabbitMQConnection
     ): List<Message> {
-        val queues = if (queueName != null) {
-            listOf(queueName)
-        } else {
-            rabbitClient.listQueuesByPattern(queueNamePattern ?: "*", connection).map { it.name }
-        }
+        val queues =
+            if (queueName != null) {
+                listOf(queueName)
+            } else {
+                rabbitClient.listQueuesByPattern(queueNamePattern ?: ".", connection).map { it.name }
+            }
 
         val regex = pattern.toGlobRegex()
         val matchingMessages = mutableListOf<Message>()
