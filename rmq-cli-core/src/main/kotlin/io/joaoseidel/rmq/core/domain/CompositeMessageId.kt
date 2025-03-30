@@ -19,15 +19,12 @@ data class CompositeMessageId(val value: String) {
          * consistent across CLI executions for the same message.
          */
         fun create(
-            deliveryTagOrCount: String,
+            deliveryTagOrCount: Long,
             queue: String?,
             exchange: String,
             routingKey: String,
             payload: ByteArray
         ): CompositeMessageId {
-            // Extract and validate delivery tag
-            val deliveryTag = deliveryTagOrCount.toLongOrNull() ?: 0L
-
             // Create a deterministic hash of routing components
             val routingInfo = buildRoutingInfo(queue, exchange, routingKey)
             val routingInfoHash = generateSecureHash(routingInfo.toByteArray())
@@ -39,7 +36,7 @@ data class CompositeMessageId(val value: String) {
             val buffer = ByteBuffer.allocate(TOTAL_BYTES)
 
             // Write delivery tag (8 bytes) - preserved exactly
-            buffer.putLong(deliveryTag)
+            buffer.putLong(deliveryTagOrCount)
 
             // Write routing info hash (8 bytes) - first 8 bytes of SHA-256
             buffer.put(routingInfoHash, 0, ROUTING_INFO_SIZE)
