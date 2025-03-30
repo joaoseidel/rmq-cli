@@ -741,6 +741,23 @@
       ]
     },
     {
+      "type": "io.joaoseidel.rmq.app.adapter.ports.output.MessageBackupEntity",
+      "fields": [
+        {
+          "name": "Companion"
+        }
+      ]
+    },
+    {
+      "type": "io.joaoseidel.rmq.app.adapter.ports.output.MessageBackupEntity$Companion",
+      "methods": [
+        {
+          "name": "serializer",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.joaoseidel.rmq.core.domain.ConnectionInfo",
       "fields": [
         {
@@ -809,6 +826,9 @@
       ]
     },
     {
+      "type": "java.io.Serializable"
+    },
+    {
       "type": "java.lang.ClassValue"
     },
     {
@@ -856,7 +876,18 @@
       "type": "java.security.KeyStoreSpi"
     },
     {
+      "type": "java.util.AbstractMap",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "java.util.Collections$EmptyMap",
+      "allDeclaredFields": true
+    },
+    {
       "type": "java.util.List"
+    },
+    {
+      "type": "java.util.Map"
     },
     {
       "type": "java.util.concurrent.ForkJoinTask",
@@ -959,6 +990,72 @@
     },
     {
       "type": "kotlin.reflect.jvm.internal.impl.load.java.JavaIncompatibilityRulesOverridabilityCondition"
+    },
+    {
+      "type": "kotlinx.coroutines.EventLoopImplBase",
+      "fields": [
+        {
+          "name": "_delayed$volatile"
+        },
+        {
+          "name": "_isCompleted$volatile"
+        },
+        {
+          "name": "_queue$volatile"
+        }
+      ]
+    },
+    {
+      "type": "kotlinx.coroutines.JobSupport",
+      "fields": [
+        {
+          "name": "_parentHandle$volatile"
+        },
+        {
+          "name": "_state$volatile"
+        }
+      ]
+    },
+    {
+      "type": "kotlinx.coroutines.internal.DispatchedContinuation",
+      "fields": [
+        {
+          "name": "_reusableCancellableContinuation$volatile"
+        }
+      ]
+    },
+    {
+      "type": "kotlinx.coroutines.internal.LockFreeTaskQueue",
+      "fields": [
+        {
+          "name": "_cur$volatile"
+        }
+      ]
+    },
+    {
+      "type": "kotlinx.coroutines.internal.LockFreeTaskQueueCore",
+      "fields": [
+        {
+          "name": "_next$volatile"
+        },
+        {
+          "name": "_state$volatile"
+        }
+      ]
+    },
+    {
+      "type": "kotlinx.coroutines.scheduling.CoroutineScheduler",
+      "fields": [
+        {
+          "name": "_isTerminated$volatile"
+        },
+        {
+          "name": "controlState$volatile"
+        },
+        {
+          "name": "parkedWorkersStack$volatile"
+        }
+      ]
     },
     {
       "type": "sun.security.pkcs12.PKCS12KeyStore",
