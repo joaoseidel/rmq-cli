@@ -13,6 +13,7 @@ import io.joaoseidel.rmq.core.domain.Message
 import io.joaoseidel.rmq.core.domain.MessageCallback
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
+import kotlin.text.Charsets.UTF_8
 
 private val logger = KotlinLogging.logger {}
 
@@ -46,9 +47,9 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
         connect(connectionInfo) != null
 
     override fun publishMessage(
-        exchangeName: String,
+        exchangeName: String?,
         routingKey: String,
-        payload: ByteArray,
+        payload: String,
         connection: RabbitMQConnection
     ): Boolean {
         try {
@@ -56,13 +57,11 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
                 throw IllegalStateException("Channel is not available")
             }
 
-            val props = AMQP.BasicProperties.Builder().build()
-
             channel.basicPublish(
-                exchangeName,
+                exchangeName ?: "amq.default",
                 routingKey,
-                props,
-                payload
+                AMQP.BasicProperties.Builder().build(),
+                payload.toByteArray(charset(UTF_8.name()))
             )
 
             return true
@@ -87,28 +86,7 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
 
             for (i in 1..count) {
                 val response = channel.basicGet(queueName, ack) ?: break
-                val envelope = response.envelope
-                val props = response.props
-
-                val messageId = CompositeMessageId.create(
-                    deliveryTagOrCount = envelope.deliveryTag.toString(),
-                    queue = queueName,
-                    exchange = envelope.exchange,
-                    routingKey = envelope.routingKey,
-                    payload = response.body
-                )
-
-                val headersMap = props.headers?.mapValues { it.value.toString() } ?: emptyMap()
-
-                val message = Message(
-                    id = messageId,
-                    payload = response.body,
-                    queue = queueName,
-                    exchange = envelope.exchange,
-                    routingKey = envelope.routingKey,
-                    properties = headersMap
-                )
-
+                val message = Message.AmqpMessage.from(response.envelope, response.body, response.props)
                 messages.add(message)
             }
 
@@ -186,26 +164,7 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
             }
 
             val deliverCallback = DeliverCallback { consumerTag, delivery ->
-                val headersMap = delivery.properties.headers?.mapValues { it.value.toString() } ?: emptyMap()
-                val envelope = delivery.envelope
-
-                val messageId = CompositeMessageId.create(
-                    deliveryTagOrCount = envelope.deliveryTag.toString(),
-                    queue = queueName,
-                    exchange = envelope.exchange,
-                    routingKey = envelope.routingKey,
-                    payload = delivery.body
-                )
-
-                val message = Message(
-                    id = messageId,
-                    payload = delivery.body,
-                    queue = queueName,
-                    exchange = envelope.exchange,
-                    routingKey = envelope.routingKey,
-                    properties = headersMap
-                )
-
+                val message = Message.AmqpMessage.from(delivery)
                 messageCallback.handle(consumerTag, message)
             }
 

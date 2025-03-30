@@ -6,7 +6,6 @@ import com.rabbitmq.http.client.GetEncoding
 import com.rabbitmq.http.client.domain.OutboundMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.joaoseidel.rmq.core.domain.CancellationCallback
-import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import io.joaoseidel.rmq.core.domain.ConnectionInfo
 import io.joaoseidel.rmq.core.domain.Message
 import io.joaoseidel.rmq.core.domain.MessageCallback
@@ -35,16 +34,18 @@ internal class HttpRabbitMQClient : RabbitMQClient {
     }
 
     override fun publishMessage(
-        exchangeName: String,
+        exchangeName: String?,
         routingKey: String,
-        payload: ByteArray,
+        payload: String,
         connection: RabbitMQConnection
     ) = withHttpClient(connection.connectionInfo) { client ->
         try {
             val vHost = connection.connectionInfo.vHost.name
-            val message = OutboundMessage().payload(String(payload, UTF_8))
+            val message =
+                OutboundMessage()
+                    .payload(payload)
 
-            client.publish(vHost, exchangeName, routingKey, message)
+            client.publish(vHost, exchangeName ?: "amq.default", routingKey, message)
         } catch (e: Exception) {
             logger.error { "Failed to publish message: ${e.message}" }
             false
@@ -62,23 +63,7 @@ internal class HttpRabbitMQClient : RabbitMQClient {
             val ackMode = if (ack) ACK_REQUEUE_FALSE else NACK_REQUEUE_TRUE
 
             val messageList = client.get(vHostName, queueName, count, ackMode, GetEncoding.AUTO)
-                ?.map {
-                    val messageId = CompositeMessageId.create(
-                        deliveryTagOrCount = it.messageCount.toString(),
-                        queue = queueName,
-                        exchange = "", // Not available in the HTTP API
-                        routingKey = it.routingKey ?: "",
-                        payload = it.payload.toByteArray()
-                    )
-
-                    Message(
-                        id = messageId,
-                        exchange = "", // Not available in the HTTP API
-                        routingKey = it.routingKey ?: "",
-                        payload = it.payload.toByteArray(),
-                        properties = emptyMap()
-                    )
-                }
+                ?.map { Message.HttpMessage.from(it) }
                 ?: emptyList()
 
             messageList

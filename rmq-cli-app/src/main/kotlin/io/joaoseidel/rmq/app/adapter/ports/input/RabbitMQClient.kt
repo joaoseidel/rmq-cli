@@ -26,9 +26,9 @@ class RabbitMQClient : RabbitMQClient {
         }
 
     override fun publishMessage(
-        exchangeName: String,
+        exchangeName: String?,
         routingKey: String,
-        payload: ByteArray,
+        payload: String,
         connection: RabbitMQConnection
     ) = when (connection.connectionInfo) {
         is ConnectionInfo.AmqpConnectionInfo -> amqpRabbitMQClient.publishMessage(

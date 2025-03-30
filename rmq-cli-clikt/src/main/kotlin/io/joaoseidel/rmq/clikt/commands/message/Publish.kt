@@ -1,4 +1,4 @@
-﻿package io.joaoseidel.rmq.clikt.commands.message
+package io.joaoseidel.rmq.clikt.commands.message
 
 import com.github.ajalt.clikt.core.terminal
 import com.github.ajalt.clikt.parameters.options.option
@@ -41,9 +41,9 @@ class Publish : CliktCommandWrapper("publish") {
 
         withConnection { connection ->
             val result = if (queueName != null) {
-                messageOperations.publishToQueue(queueName!!, payload.toByteArray(), connection)
+                messageOperations.publishToQueue(queueName!!, payload, connection)
             } else {
-                messageOperations.publishToExchange(exchange!!, routingKey!!, payload.toByteArray(), connection)
+                messageOperations.publishToExchange(exchange!!, routingKey!!, payload, connection)
             }
 
             if (result) {

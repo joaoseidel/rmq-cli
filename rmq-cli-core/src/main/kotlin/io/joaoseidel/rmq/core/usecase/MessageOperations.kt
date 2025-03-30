@@ -1,4 +1,4 @@
-﻿package io.joaoseidel.rmq.core.usecase
+package io.joaoseidel.rmq.core.usecase
 
 import io.joaoseidel.rmq.core.domain.Message
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
@@ -30,10 +30,9 @@ class MessageOperations {
      */
     fun publishToQueue(
         queueName: String,
-        payload: ByteArray,
-        connection: RabbitMQConnection
+        payload: String,
+        connection: RabbitMQConnection,
     ) = rabbitClient.publishMessage(
-        exchangeName = "",
         routingKey = queueName,
         payload = payload,
         connection = connection
@@ -51,7 +50,7 @@ class MessageOperations {
     fun publishToExchange(
         exchangeName: String,
         routingKey: String,
-        payload: ByteArray,
+        payload: String,
         connection: RabbitMQConnection
     ) = rabbitClient.publishMessage(
         exchangeName = exchangeName,
@@ -115,10 +114,8 @@ class MessageOperations {
 
             for (message in messages) {
                 try {
-                    val bodyText = message.bodyAsString()
-
                     if (
-                        regex.containsMatchIn(bodyText) ||
+                        regex.containsMatchIn(message.payload) ||
                         regex.containsMatchIn(message.id.value)
                     ) {
                         matchingMessages.add(message)
@@ -168,9 +165,7 @@ class MessageOperations {
 
             for (message in messages) {
                 try {
-                    val bodyText = message.bodyAsString()
-
-                    if (messageRegex.containsMatchIn(bodyText) ||
+                    if (messageRegex.containsMatchIn(message.payload) ||
                         messageRegex.containsMatchIn(message.id.value)
                     ) {
                         matchingMessages.add(message)

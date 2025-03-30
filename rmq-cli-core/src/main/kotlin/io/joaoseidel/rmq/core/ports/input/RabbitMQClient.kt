@@ -52,9 +52,9 @@ interface RabbitMQClient {
      * @return true if the operation was successful, false otherwise
      */
     fun publishMessage(
-        exchangeName: String,
+        exchangeName: String? = null,
         routingKey: String,
-        payload: ByteArray,
+        payload: String,
         connection: RabbitMQConnection
     ): Boolean
 
