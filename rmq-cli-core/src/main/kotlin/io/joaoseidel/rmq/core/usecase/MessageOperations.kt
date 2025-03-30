@@ -1,11 +1,14 @@
 package io.joaoseidel.rmq.core.usecase
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.joaoseidel.rmq.core.domain.Message
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
+import io.joaoseidel.rmq.core.domain.OperationSummary
+import io.joaoseidel.rmq.core.domain.ProcessingResult
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
+import io.joaoseidel.rmq.core.ports.output.SafeOperationCoordinator
 import io.joaoseidel.rmq.core.toGlobRegex
-import io.github.oshai.kotlinlogging.KotlinLogging
-import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import org.koin.core.annotation.Singleton
 import org.koin.java.KoinJavaComponent.inject
 
@@ -19,6 +22,7 @@ private val logger = KotlinLogging.logger {}
 @Singleton
 class MessageOperations {
     private val rabbitClient: RabbitMQClient by inject(RabbitMQClient::class.java)
+    private val safeOperationCoordinator: SafeOperationCoordinator by inject(SafeOperationCoordinator::class.java)
 
     /**
      * Publishes a message to a queue.
@@ -276,20 +280,118 @@ class MessageOperations {
     }
 
     /**
-     * Deletes a message from a queue.
+     * Safely deletes a message from a specified queue.
      *
-     * @param messageId ID of the message to delete
-     * @param queueName Name of the queue
-     * @param connection Connection to use
-     * @return true if successful, false otherwise
+     * This function ensures reliable deletion of a message identified by its ID from a queue
+     * using the given RabbitMQ connection. It fetches messages from the queue to locate the
+     * target message and then attempts to delete it. The operation is executed through a
+     * `SafeOperationCoordinator` to handle failures gracefully and ensure consistency.
+     *
+     * @param messageId The unique identifier of the message to delete.
+     * @param queueName The name of the queue from which the message will be deleted.
+     * @param connection The RabbitMQ connection used for the operation.
+     * @return An `OperationSummary` indicating the success or failure of the deletion operation.
      */
-    fun deleteMessage(
+    suspend fun safeDeleteMessage(
         messageId: CompositeMessageId,
         queueName: String,
-        connection: RabbitMQConnection
-    ) = rabbitClient.deleteMessage(
-        messageId = messageId,
-        queueName = queueName,
-        connection = connection
+        connection: RabbitMQConnection,
+    ): OperationSummary = safeOperationCoordinator.executeOperation(
+        operationType = "delete-message",
+        messagesProvider = {
+            rabbitClient.getMessages(queueName, Int.MAX_VALUE, true, connection)
+                .filter { it.id == messageId }
+        },
+        processor = { message ->
+            val success = rabbitClient.publishMessage(message.exchange, message.routingKey, message.payload, connection)
+
+            if (success) {
+                ProcessingResult.Success(message.id.value)
+            } else {
+                ProcessingResult.Failure(message.id.value, "Failed to republish acked message")
+            }
+        }
+    )
+
+    /**
+     * Safely reprocesses a message by republishing it to its original exchange.
+     *
+     * This function attempts to republish the provided message to its defined exchange and routing key
+     * using the specified RabbitMQ connection. If the message belongs to a specific queue, and the republish
+     * operation succeeds, it optionally fetches the message back for further processing. The operation is
+     * executed through a `SafeOperationCoordinator` to ensure resilience against failures and proper handling
+     * of state transitions.
+     *
+     * @param message The message to be reprocessed.
+     * @param connection The RabbitMQ connection to be used for the operation.
+     * @return An `OperationSummary` summarizing the success or failure of the reprocess operation for the message.
+     */
+    suspend fun safeReprocessMessage(
+        message: Message,
+        connection: RabbitMQConnection,
+    ): OperationSummary {
+        val operationResult = safeDeleteMessage(message.id, message.routingKey, connection)
+
+        if (operationResult.failed > 0) {
+            return operationResult
+        }
+
+        return safeOperationCoordinator.executeOperation(
+            operationType = "reprocess-message",
+            messagesProvider = { listOf(message) },
+            processor = { msg ->
+                val published =
+                    rabbitClient.publishMessage(
+                        msg.exchange,
+                        msg.routingKey,
+                        msg.payload,
+                        connection,
+                    )
+                if (published) {
+                    ProcessingResult.Success(msg.id.value)
+                } else {
+                    ProcessingResult.Failure(msg.id.value, "Failed to republish message")
+                }
+            }
+        )
+    }
+
+    /**
+     * Safely requeues a message to a specified target queue, ensuring reliability and consistency.
+     *
+     * This function attempts to publish the provided message to the target queue. In case the
+     * message was successfully published, it optionally acknowledges the message in its original
+     * queue. The operation is orchestrated using a safe operation coordinator to handle any
+     * potential failure scenarios gracefully.
+     *
+     * @param message The message to be requeued.
+     * @param toQueue The name of the target queue where the message should be requeued.
+     * @param connection The RabbitMQ connection to be used for the operation.
+     * @return An `OperationSummary` detailing the result of the requeue operation, including
+     *         success or failure for the processed message.
+     */
+    suspend fun safeRequeueMessage(
+        message: Message,
+        toQueue: String,
+        connection: RabbitMQConnection,
+    ): OperationSummary = safeOperationCoordinator.executeOperation(
+        operationType = "requeue-message",
+        messagesProvider = { listOf(message) },
+        processor = {
+            val published =
+                rabbitClient.publishMessage(
+                    it.exchange,
+                    toQueue,
+                    it.payload,
+                    connection,
+                )
+
+            if (published) {
+                rabbitClient.getMessages(it.routingKey, 1, true, connection)
+                ProcessingResult.Success(it.id.value)
+            } else {
+                ProcessingResult.Failure(it.id.value, "Failed to publish to target queue")
+            }
+        }
     )
 }

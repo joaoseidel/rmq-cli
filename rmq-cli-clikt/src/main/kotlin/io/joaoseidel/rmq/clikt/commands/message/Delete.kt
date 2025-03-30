@@ -10,15 +10,20 @@ import com.github.ajalt.mordant.terminal.success
 import com.github.ajalt.mordant.terminal.warning
 import io.joaoseidel.rmq.clikt.CliktCommandWrapper
 import io.joaoseidel.rmq.clikt.error
+import io.joaoseidel.rmq.clikt.formatCount
 import io.joaoseidel.rmq.clikt.formatName
 import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import io.joaoseidel.rmq.core.usecase.MessageOperations
+import kotlinx.coroutines.runBlocking
 import org.koin.java.KoinJavaComponent.inject
 
 class Delete : CliktCommandWrapper("delete") {
     private val messageOperations: MessageOperations by inject(MessageOperations::class.java)
 
-    private val messageId by argument(name = "message_id", help = "ID of the message to delete").convert { CompositeMessageId(it) }
+    private val messageId by argument(
+        name = "message_id",
+        help = "ID of the message to delete"
+    ).convert { CompositeMessageId(it) }
     private val queueName by argument(name = "queue_name", help = "Name of the queue containing the message")
     private val force by option("--force", help = "Delete without confirmation").flag()
 
@@ -26,8 +31,11 @@ class Delete : CliktCommandWrapper("delete") {
         val terminal = terminal
 
         if (!force) {
-            terminal.warning("Are you sure you want to delete message ${terminal.formatName(messageId.value)} from queue ${terminal.formatName(queueName)}? (y/N)")
-            val response = readLine()?.lowercase()
+            val messageIdFormatted = terminal.formatName(messageId.value)
+            val queueNameFormatted = terminal.formatName(queueName)
+            terminal.warning("Are you sure you want to delete message $messageIdFormatted from queue $queueNameFormatted? (y/N)")
+
+            val response = readlnOrNull()?.lowercase()
             if (response != "y" && response != "yes") {
                 terminal.danger("Operation cancelled.")
                 return
@@ -35,11 +43,16 @@ class Delete : CliktCommandWrapper("delete") {
         }
 
         withConnection { connection ->
-            val result = messageOperations.deleteMessage(messageId, queueName, connection)
-            if (result) {
-                terminal.success("Deleted message #$messageId from queue queueName.")
-            } else {
-                terminal.error("Failed to delete message ${terminal.formatName(messageId.value)} from queue ${terminal.formatName(queueName)}. Check if the message exists or if there are connection issues.")
+            val operationResult = runBlocking {
+                messageOperations.safeDeleteMessage(messageId, queueName, connection)
+            }
+
+            terminal.success("Message #${messageId.value} deleted from $queueName.")
+
+            if (operationResult.failed > 0) {
+                val formatCount = terminal.formatCount(operationResult.failed, "message")
+                terminal.error("Failed to requeue $formatCount to $queueName after delete operation.")
+                terminal.warning("The operation ${operationResult.id} was saved successfuly under the message_backup_operations file.")
             }
         }
     }

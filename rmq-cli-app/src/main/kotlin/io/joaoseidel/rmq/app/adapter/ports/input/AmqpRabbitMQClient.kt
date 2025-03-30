@@ -97,37 +97,6 @@ internal class AmqpRabbitMQClient : RabbitMQClient {
         }
     }
 
-    override fun deleteMessage(
-        messageId: CompositeMessageId,
-        queueName: String,
-        connection: RabbitMQConnection
-    ): Boolean {
-        try {
-            val messages = getMessages(
-                queueName = queueName,
-                count = Int.MAX_VALUE,
-                ack = true,
-                connection = connection
-            )
-
-            messages
-                .filter { it.id != messageId }
-                .forEach {
-                    publishMessage(
-                        exchangeName = it.exchange,
-                        routingKey = it.routingKey,
-                        payload = it.payload,
-                        connection = connection
-                    )
-                }
-
-            return messages.any { it.id == messageId }
-        } catch (e: Exception) {
-            logger.error { "Failed to delete message $messageId from queue $queueName: ${e.message}" }
-            return false
-        }
-    }
-
     override fun purgeQueue(
         queueName: String,
         connection: RabbitMQConnection

@@ -73,34 +73,6 @@ internal class HttpRabbitMQClient : RabbitMQClient {
         }
     }
 
-    override fun deleteMessage(
-        messageId: CompositeMessageId,
-        queueName: String,
-        connection: RabbitMQConnection
-    ): Boolean {
-        return try {
-            val messages = getMessages(queueName, Int.MAX_VALUE, true, connection)
-
-            val found = messages.any { it.id == messageId }
-            if (!found) return false
-
-            val messagesToKeep = messages.filter { it.id != messageId }
-            for (message in messagesToKeep) {
-                publishMessage(
-                    exchangeName = message.exchange,
-                    routingKey = message.routingKey,
-                    payload = message.payload,
-                    connection = connection
-                )
-            }
-
-            true
-        } catch (e: Exception) {
-            logger.error { "Failed to delete message $messageId from queue $queueName: ${e.message}" }
-            false
-        }
-    }
-
     override fun purgeQueue(
         queueName: String,
         connection: RabbitMQConnection

@@ -2,8 +2,11 @@
 
 import io.joaoseidel.rmq.core.domain.CancellationCallback
 import io.joaoseidel.rmq.core.domain.MessageCallback
+import io.joaoseidel.rmq.core.domain.OperationSummary
+import io.joaoseidel.rmq.core.domain.ProcessingResult
 import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
+import io.joaoseidel.rmq.core.ports.output.SafeOperationCoordinator
 import org.koin.core.annotation.Singleton
 import org.koin.java.KoinJavaComponent.inject
 
@@ -18,6 +21,7 @@ import org.koin.java.KoinJavaComponent.inject
 @Singleton
 class QueueOperations {
     private val rabbitClient: RabbitMQClient by inject(RabbitMQClient::class.java)
+    private val safeOperationCoordinator: SafeOperationCoordinator by inject(SafeOperationCoordinator::class.java)
 
     /**
      * Lists all queues in a specific Virtual Host.
@@ -160,4 +164,79 @@ class QueueOperations {
             connection = connection
         )
     }
+
+    /**
+     * Safely requeues messages from one queue to another with reliable processing and error handling.
+     * This operation retrieves messages from the source queue without acknowledgment, attempts to publish
+     * them to the target queue, and acknowledges them in the source queue only if the publishing operation
+     * is successful. Each message is handled individually to ensure that failures in processing do not
+     * affect other messages in the operation.
+     *
+     * @param fromQueue The name of the source queue from which messages will be requeued.
+     * @param toQueue The name of the destination queue to which messages will be requeued.
+     * @param limit The maximum number of messages to requeue in a single operation.
+     * @param connection The RabbitMQ connection to be used for the operation.
+     * @return An `OperationSummary` containing details about the success and failure of the operation.
+     */
+    suspend fun safeRequeueMessages(
+        fromQueue: String,
+        toQueue: String,
+        limit: Int,
+        connection: RabbitMQConnection
+    ): OperationSummary = safeOperationCoordinator.executeOperation(
+        operationType = "requeue-messages",
+        messagesProvider = {
+            rabbitClient.getMessages(fromQueue, limit, true, connection)
+        },
+        processor = { message ->
+            val published = rabbitClient.publishMessage(
+                routingKey = toQueue,
+                payload = message.payload,
+                connection = connection
+            )
+
+            if (published) {
+                ProcessingResult.Success(message.id.value)
+            } else {
+                ProcessingResult.Failure(message.id.value, "Failed to publish to target queue")
+            }
+        }
+    )
+
+    /**
+     * Safely reprocesses messages from a specified queue with reliable error handling and processing guarantees.
+     * This operation retrieves messages from the queue without acknowledgment, attempts to republish them
+     * to their original exchange using the same routing key, and acknowledges the messages in the queue
+     * only if the republishing operation is successful. Each message is processed individually to minimize
+     * the effect of failures on other messages in the operation.
+     *
+     * @param queueName The name of the queue whose messages will be reprocessed.
+     * @param limit The maximum number of messages to fetch and reprocess in a single operation.
+     * @param connection The RabbitMQ connection to be used for the operation.
+     * @return An `OperationSummary` containing details about the success and failure of the operation.
+     */
+    suspend fun safeReprocessMessages(
+        queueName: String,
+        limit: Int,
+        connection: RabbitMQConnection
+    ): OperationSummary = safeOperationCoordinator.executeOperation(
+        operationType = "reprocess-messages",
+        messagesProvider = {
+            rabbitClient.getMessages(queueName, limit, true, connection)
+        },
+        processor = { message ->
+            val published = rabbitClient.publishMessage(
+                message.exchange,
+                message.routingKey,
+                message.payload,
+                connection
+            )
+
+            if (published) {
+                ProcessingResult.Success(message.id.value)
+            } else {
+                ProcessingResult.Failure(message.id.value, "Failed to republish to original exchange")
+            }
+        }
+    )
 }

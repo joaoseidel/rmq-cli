@@ -141,20 +141,6 @@ interface RabbitMQClient {
     }
 
     /**
-     * Acknowledges a message.
-     *
-     * @param messageId Message ID
-     * @param queueName Queue name
-     * @param connection Connection to use
-     * @return true if the operation was successful, false otherwise
-     */
-    fun deleteMessage(
-        messageId: CompositeMessageId,
-        queueName: String,
-        connection: RabbitMQConnection
-    ): Boolean
-
-    /**
      * Purges a queue.
      *
      * @param queueName Queue name
