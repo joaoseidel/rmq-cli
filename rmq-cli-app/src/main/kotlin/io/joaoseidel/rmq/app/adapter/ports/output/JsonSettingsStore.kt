@@ -3,9 +3,9 @@
 
 package io.joaoseidel.rmq.app.adapter.ports.output
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.joaoseidel.rmq.app.configuration.json
 import io.joaoseidel.rmq.core.ports.output.SettingsStore
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.JsonArray
@@ -17,7 +17,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
-import org.koin.core.annotation.Singleton
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -31,12 +30,12 @@ private val logger = KotlinLogging.logger {}
  * JSON-based implementation of the [SettingsStore] interface.
  * This class stores settings in a structured JSON file
  */
-@Singleton
-class JsonSettingsStore : SettingsStore {
-    private val configDir = "${System.getProperty("user.home")}/.rmq-cli"
-    private val settingsFile = "$configDir/settings.json"
+class JsonSettingsStore(
+    private val configDir: String = "${System.getProperty("user.home")}/.rmq-cli",
+    private val fileName: String = "settings"
+) : SettingsStore {
+    private val settingsFile: String = "$configDir/$fileName.json"
 
-    // In-memory settings data
     private var rootObject: JsonObject = JsonObject(emptyMap())
 
     init {

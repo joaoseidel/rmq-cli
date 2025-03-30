@@ -14,7 +14,7 @@ private val logger = KotlinLogging.logger {}
  */
 @Singleton
 class ConfigurationStore(
-    private val settingsStore: SettingsStore
+    private val settingsStore: SettingsStore = JsonSettingsStore()
 ) : ConfigurationStore {
     companion object {
         const val CONNECTION_COLLECTION = "connections"
