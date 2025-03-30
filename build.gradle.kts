@@ -1,6 +1,4 @@
-﻿@file:Suppress("UnstableApiUsage")
-
-import org.gradle.api.tasks.testing.logging.TestLogEvent
+﻿import org.gradle.api.tasks.testing.logging.TestLogEvent
 
 plugins {
     alias(libs.plugins.kotlinJvm)

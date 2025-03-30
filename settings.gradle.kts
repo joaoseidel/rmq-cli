@@ -1,7 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
-enableFeaturePreview("STABLE_CONFIGURATION_CACHE")
-
 dependencyResolutionManagement {
     repositories {
         mavenCentral()

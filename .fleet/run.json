@@ -15,7 +15,7 @@
                 "clean build"
             ],
             "tasks": [
-                "buildNative"
+                ":rmq-cli-app:nativeBuild"
             ]
         },
         {
