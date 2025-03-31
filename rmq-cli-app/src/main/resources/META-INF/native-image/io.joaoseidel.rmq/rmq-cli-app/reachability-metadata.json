@@ -350,6 +350,22 @@
       "allDeclaredFields": true
     },
     {
+      "type": "com.rabbitmq.http.client.domain.Page",
+      "allDeclaredFields": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setItems",
+          "parameterTypes": [
+            "java.lang.Object[]"
+          ]
+        }
+      ]
+    },
+    {
       "type": "com.rabbitmq.http.client.domain.QueueDetails",
       "allDeclaredFields": true
     },
@@ -2048,6 +2064,12 @@
         }
       ],
       "methods": [
+        {
+          "name": "expandArgs",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        },
         {
           "name": "getApplicationClass",
           "parameterTypes": []

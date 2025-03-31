@@ -1,0 +1,216 @@
+{
+    "rabbit_version": "3.12.12",
+    "rabbitmq_version": "3.12.12",
+    "product_name": "RabbitMQ",
+    "product_version": "3.12.12",
+    "users": [
+        {
+            "name": "rabbitmq",
+            "password_hash": "8NpZRUKqvxm5KSxz4aGkBTxBY1ywVF+OU+BG81HBP+a3YwP2",
+            "hashing_algorithm": "rabbit_password_hashing_sha256",
+            "tags": [
+                "administrator"
+            ],
+            "limits": {}
+        }
+    ],
+    "vhosts": [
+        {
+            "name": "/"
+        },
+        {
+            "name": "teste-one",
+            "description": "Test virtual host one"
+        },
+        {
+            "name": "teste-two",
+            "description": "Test virtual host two"
+        }
+    ],
+    "permissions": [
+        {
+            "user": "rabbitmq",
+            "vhost": "/",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        },
+        {
+            "user": "rabbitmq",
+            "vhost": "teste-one",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        },
+        {
+            "user": "rabbitmq",
+            "vhost": "teste-two",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        }
+    ],
+    "queues": [
+        {
+            "name": "test-queue",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "test-queue-2",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "order-processing",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "order-failed",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "user-events",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "test-queue",
+            "vhost": "teste-one",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "error-queue",
+            "vhost": "teste-one",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "test-queue",
+            "vhost": "teste-two",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        },
+        {
+            "name": "notification-queue",
+            "vhost": "teste-two",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {
+                "x-queue-type": "classic"
+            }
+        }
+    ],
+    "exchanges": [
+        {
+            "name": "order-exchange",
+            "vhost": "/",
+            "type": "topic",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        },
+        {
+            "name": "user-exchange",
+            "vhost": "/",
+            "type": "topic",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        },
+        {
+            "name": "error-exchange",
+            "vhost": "teste-one",
+            "type": "fanout",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        },
+        {
+            "name": "notification-exchange",
+            "vhost": "teste-two",
+            "type": "topic",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        }
+    ],
+    "bindings": [
+        {
+            "source": "order-exchange",
+            "vhost": "/",
+            "destination": "order-processing",
+            "destination_type": "queue",
+            "routing_key": "order.created",
+            "arguments": {}
+        },
+        {
+            "source": "order-exchange",
+            "vhost": "/",
+            "destination": "order-failed",
+            "destination_type": "queue",
+            "routing_key": "order.failed",
+            "arguments": {}
+        },
+        {
+            "source": "user-exchange",
+            "vhost": "/",
+            "destination": "user-events",
+            "destination_type": "queue",
+            "routing_key": "user.#",
+            "arguments": {}
+        },
+        {
+            "source": "error-exchange",
+            "vhost": "teste-one",
+            "destination": "error-queue",
+            "destination_type": "queue",
+            "routing_key": "",
+            "arguments": {}
+        },
+        {
+            "source": "notification-exchange",
+            "vhost": "teste-two",
+            "destination": "notification-queue",
+            "destination_type": "queue",
+            "routing_key": "notification.#",
+            "arguments": {}
+        }
+    ]
+}

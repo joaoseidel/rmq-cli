@@ -7,10 +7,27 @@ services:
       RABBITMQ_DEFAULT_USER: "rabbitmq"
       RABBITMQ_DEFAULT_PASS: "rabbitmq"
       RABBITMQ_DEFAULT_VHOST: "/"
+      RABBITMQ_LOAD_DEFINITIONS: "/etc/rabbitmq/definitions.json"
     ports:
       - "15672:15672"
       - "5672:5672"
     volumes:
-      - "./rabbitmq/data/:/var/lib/rabbitmq/"
-      - "./rabbitmq/log/:/var/log/rabbitmq"
+      - "./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:rw"
       - "./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:rw"
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service to initialize RabbitMQ with predefined messages containing various properties
+  message-initializer:
+    image: "python:3.9-slim"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - "./message-initializer:/app"
+    working_dir: /app
+    command: >
+      bash -c "chmod +x /app/startup.sh && /app/startup.sh"
