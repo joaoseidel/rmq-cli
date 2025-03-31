@@ -1,5 +1,7 @@
-﻿services:
-  rabbit:
+﻿name: "rmq-development-stack"
+
+services:
+  rabbitmq:
     image: "rabbitmq:3-management"
     environment:
       RABBITMQ_DEFAULT_USER: "rabbitmq"
@@ -8,3 +10,7 @@
     ports:
       - "15672:15672"
       - "5672:5672"
+    volumes:
+      - "./rabbitmq/data/:/var/lib/rabbitmq/"
+      - "./rabbitmq/log/:/var/log/rabbitmq"
+      - "./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:rw"
