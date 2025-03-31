@@ -46,3 +46,7 @@ repomix-output.*
 
 ### Misc ###
 *.log
+
+### Docker compose dir ###
+.docker-compose/data
+.docker-compose/log
