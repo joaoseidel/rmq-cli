@@ -59,6 +59,5 @@ kotlin {
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(23)
-        vendor = JvmVendorSpec.ORACLE
     }
 }

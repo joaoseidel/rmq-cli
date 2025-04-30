@@ -124,6 +124,10 @@
       ]
     },
     {
+      "type": "com.github.ajalt.mordant.terminal.terminalinterface.jna.PosixLibC$winsize",
+      "allDeclaredFields": true
+    },
+    {
       "type": "com.github.ajalt.mordant.terminal.terminalinterface.jna.TerminalInterfaceProviderJna"
     },
     {
@@ -1121,6 +1125,17 @@
       ]
     },
     {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
+        }
+      ]
+    },
+    {
       "type": "sun.security.provider.SHA",
       "methods": [
         {
@@ -1384,6 +1399,13 @@
     {
       "type": {
         "proxy": [
+          "com.github.ajalt.mordant.terminal.terminalinterface.jna.PosixLibC"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
           "com.github.ajalt.mordant.terminal.terminalinterface.jna.WinKernel32Lib"
         ]
       }
@@ -1422,6 +1444,9 @@
     },
     {
       "glob": "META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+    },
+    {
+      "glob": "com/sun/jna/linux-x86-64/libjnidispatch.so"
     },
     {
       "glob": "com/sun/jna/win32-x86-64/jnidispatch.dll"
