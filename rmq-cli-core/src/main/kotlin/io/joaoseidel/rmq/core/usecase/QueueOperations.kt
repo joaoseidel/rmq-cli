@@ -1,6 +1,11 @@
 ﻿package io.joaoseidel.rmq.core.usecase
 
-import io.joaoseidel.rmq.core.domain.*
+import io.joaoseidel.rmq.core.domain.CancellationCallback
+import io.joaoseidel.rmq.core.domain.CompositeMessageId
+import io.joaoseidel.rmq.core.domain.MessageCallback
+import io.joaoseidel.rmq.core.domain.OperationSummary
+import io.joaoseidel.rmq.core.domain.ProcessingResult
+import io.joaoseidel.rmq.core.domain.RabbitMQConnection
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
 import io.joaoseidel.rmq.core.ports.output.SafeOperationCoordinator
 import org.koin.core.annotation.Singleton
@@ -54,54 +59,6 @@ class QueueOperations {
         queueName: String,
         connection: RabbitMQConnection
     ) = rabbitClient.listQueues(connection).find { it.name == queueName }
-
-    /**
-     * Requeues all messages from one queue to another.
-     *
-     * @param fromQueue The queue name
-     * @param toQueue The queue name
-     * @param limit The maximum number of messages to requeue
-     * @param connection The connection to use
-     * @return true if the operation was successful, false otherwise
-     */
-    fun requeueMessages(
-        fromQueue: String,
-        toQueue: String,
-        limit: Int,
-        connection: RabbitMQConnection
-    ): Int {
-        val messages = rabbitClient.getMessages(fromQueue, limit, true, connection).ifEmpty { null }
-            ?: return 0
-
-        messages.forEach {
-            rabbitClient.publishMessage("", toQueue, it.payload, connection)
-        }
-
-        return messages.size
-    }
-
-    /**
-     * Reprocess all messages from one queue.
-     *
-     * @param queueName The queue name
-     * @param limit The maximum number of messages to reprocess
-     * @param connection The connection to use
-     * @return true if the operation was successful, false otherwise
-     */
-    fun reprocessMessages(
-        queueName: String,
-        limit: Int,
-        connection: RabbitMQConnection
-    ): Int {
-        val messages = rabbitClient.getMessages(queueName, limit, true, connection).ifEmpty { null }
-            ?: return 0
-
-        messages.forEach {
-            rabbitClient.publishMessage(it.exchange, it.routingKey, it.payload, connection)
-        }
-
-        return messages.size
-    }
 
     /**
      * Purges a queue, removing all messages.
@@ -234,43 +191,6 @@ class QueueOperations {
                 ProcessingResult.Success(message.id.value)
             } else {
                 ProcessingResult.Failure(message.id.value, "Failed to create backup of deleted message")
-            }
-        }
-    )
-
-    /**
-     * Safely reprocesses messages from a specified queue with reliable error handling and processing guarantees.
-     * This operation retrieves messages from the queue without acknowledgment, attempts to republish them
-     * to their original exchange using the same routing key, and acknowledges the messages in the queue
-     * only if the republishing operation is successful. Each message is processed individually to minimize
-     * the effect of failures on other messages in the operation.
-     *
-     * @param queueName The name of the queue whose messages will be reprocessed.
-     * @param limit The maximum number of messages to fetch and reprocess in a single operation.
-     * @param connection The RabbitMQ connection to be used for the operation.
-     * @return An `OperationSummary` containing details about the success and failure of the operation.
-     */
-    suspend fun safeReprocessMessages(
-        queueName: String,
-        limit: Int,
-        connection: RabbitMQConnection
-    ): OperationSummary = safeOperationCoordinator.executeOperation(
-        operationType = "reprocess-messages",
-        messagesProvider = {
-            rabbitClient.getMessages(queueName, limit, true, connection)
-        },
-        processor = { message ->
-            val published = rabbitClient.publishMessage(
-                message.exchange,
-                message.routingKey,
-                message.payload,
-                connection
-            )
-
-            if (published) {
-                ProcessingResult.Success(message.id.value)
-            } else {
-                ProcessingResult.Failure(message.id.value, "Failed to republish to original exchange")
             }
         }
     )
