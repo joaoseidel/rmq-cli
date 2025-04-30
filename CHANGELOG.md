@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/joaoseidel/rmq-cli/compare/v1.3.0...v1.4.0) (2025-04-30)
+
+
+### Features
+
+* add RabbitMQ message initializer setup with predefined configurations and health checks ([982ee25](https://github.com/joaoseidel/rmq-cli/commit/982ee2555b7a1a37d296f777b0619d6304932e8c))
+
 # [1.3.0](https://github.com/joaoseidel/rmq-cli/compare/v1.2.1...v1.3.0) (2025-03-30)
 
 
