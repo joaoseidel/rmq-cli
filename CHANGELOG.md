@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/joaoseidel/rmq-cli/compare/v1.4.0...v1.5.0) (2025-04-30)
+
+
+### Features
+
+* add safe delete and processed message tracking mechanisms ([f7c738d](https://github.com/joaoseidel/rmq-cli/commit/f7c738daf80493e884d9957e789f362ecff3afe8))
+
 # [1.4.0](https://github.com/joaoseidel/rmq-cli/compare/v1.3.0...v1.4.0) (2025-04-30)
 
 
