@@ -44,11 +44,16 @@
             "sourceFile": "rmq-cli-app/build/libs/rmq-cli-app-0.1.0-SNAPSHOT-all.jar",
             "options": [
                 "-jar",
-                "-agentlib:native-image-agent=config-merge-dir=.\\rmq-cli-app\\src\\main\\resources\\META-INF\\native-image\\io.joaoseidel.rmq\\rmq-cli-app"
+                "-agentlib:native-image-agent=config-merge-dir=./rmq-cli-app/src/main/resources/META-INF/native-image/io.joaoseidel.rmq/rmq-cli-app"
             ],
             "args": [
-                "connection",
-                "list"
+                "message",
+                "search",
+                "1419870444616260",
+                "--queue-pattern",
+                ".parkingLot",
+                "--limit",
+                "5000"
             ]
         },
         {
