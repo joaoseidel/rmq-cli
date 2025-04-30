@@ -8,6 +8,7 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.mordant.terminal.success
 import com.github.ajalt.mordant.terminal.warning
+import io.joaoseidel.rmq.clikt.askConfirmation
 import io.joaoseidel.rmq.clikt.error
 import io.joaoseidel.rmq.clikt.formatName
 import io.joaoseidel.rmq.core.usecase.ConnectionOperations
@@ -47,9 +48,8 @@ class Remove : SuspendingCliktCommand("remove") {
         }
 
         if (!force) {
-            terminal.warning("Are you sure you want to remove connection ${terminal.formatName(connectionToRemove.name)}? (y/N)")
-            val response = readLine()?.lowercase()
-            if (response != "y" && response != "yes") {
+            val connectionToRemoveFormatted = terminal.formatName(connectionToRemove.name)
+            if (terminal.askConfirmation("Are you sure you want to remove connection $connectionToRemoveFormatted?")) {
                 terminal.error("Operation cancelled.")
                 return
             }

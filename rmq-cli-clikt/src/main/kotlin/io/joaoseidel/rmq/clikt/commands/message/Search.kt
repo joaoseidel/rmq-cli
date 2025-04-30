@@ -11,6 +11,7 @@ import io.joaoseidel.rmq.clikt.error
 import io.joaoseidel.rmq.clikt.formatCount
 import io.joaoseidel.rmq.clikt.formatName
 import io.joaoseidel.rmq.clikt.formatProperty
+import io.joaoseidel.rmq.clikt.askConfirmation
 import io.joaoseidel.rmq.clikt.formatters.toTable
 import io.joaoseidel.rmq.core.usecase.MessageOperations
 import org.koin.java.KoinJavaComponent.inject
@@ -27,39 +28,36 @@ class Search : CliktCommandWrapper("search") {
     override suspend fun run() {
         val terminal = terminal
 
+        val formattedQueueOption = terminal.formatName("--queue")
+        val formattedQueuePatternOption = terminal.formatProperty("--queue-pattern")
+        val formattedGlobalOption = terminal.formatProperty("--global")
+
         if (
             (queue != null && queuePattern != null) ||
             (queue != null && global) ||
             (queuePattern != null && global)
         ) {
-            terminal.error(
-                "You can only use one of: ${terminal.formatProperty("--queue")}, ${terminal.formatProperty("--queue-pattern")}, or ${
-                    terminal.formatProperty("--global")
-                }"
-            )
+            terminal.error("You can only use one of: $formattedQueueOption, $formattedQueuePatternOption, or $formattedGlobalOption")
             return
         }
 
         if (queue == null && queuePattern == null && !global) {
-            terminal.error(
-                "You must specify one of: ${terminal.formatProperty("--queue")}, ${terminal.formatProperty("--queue-pattern")}, or ${
-                    terminal.formatProperty("--global")
-                }"
-            )
+            terminal.error("You must specify one of: $formattedQueueOption, $formattedQueuePatternOption, or $formattedGlobalOption")
             return
         }
 
 
         withConnection { connection ->
-            if (global) {
-                val queueCount = rabbitClient.listQueues(connection).size
+            if (global || queuePattern != null) {
+                val queueCount = rabbitClient.listQueues(queuePattern, connection).size
 
-                terminal.warning("You are about to search for '$pattern' across all $queueCount queues in the virtual host.")
-                terminal.warning("This operation may take some time and consume significant resources.")
-                terminal.warning("Are you sure you want to continue? (y/N)")
+                val question = buildString {
+                    appendLine("You are about to search for '$pattern' across all $queueCount queues in the virtual host.")
+                    appendLine("This operation may take some time and consume significant resources.")
+                    append("Are you sure you want to continue?")
+                }
 
-                val response = readlnOrNull()?.lowercase()
-                if (response != "y" && response != "yes") {
+                if (terminal.askConfirmation(question)) {
                     terminal.error("Operation cancelled.")
                     return@withConnection
                 }
@@ -96,7 +94,7 @@ class Search : CliktCommandWrapper("search") {
             }
 
             if (messages.isEmpty()) {
-                terminal.error("No messages matching pattern ${terminal.formatName(pattern)} found.")
+                terminal.error("No messages matching pattern ${terminal.formatName(pattern)} found with a limit of $limit per queue.")
                 return@withConnection
             }
 

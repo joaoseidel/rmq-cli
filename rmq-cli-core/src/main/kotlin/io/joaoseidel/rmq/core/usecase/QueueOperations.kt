@@ -1,10 +1,6 @@
 ﻿package io.joaoseidel.rmq.core.usecase
 
-import io.joaoseidel.rmq.core.domain.CancellationCallback
-import io.joaoseidel.rmq.core.domain.MessageCallback
-import io.joaoseidel.rmq.core.domain.OperationSummary
-import io.joaoseidel.rmq.core.domain.ProcessingResult
-import io.joaoseidel.rmq.core.domain.RabbitMQConnection
+import io.joaoseidel.rmq.core.domain.*
 import io.joaoseidel.rmq.core.ports.input.RabbitMQClient
 import io.joaoseidel.rmq.core.ports.output.SafeOperationCoordinator
 import org.koin.core.annotation.Singleton
@@ -199,6 +195,45 @@ class QueueOperations {
                 ProcessingResult.Success(message.id.value)
             } else {
                 ProcessingResult.Failure(message.id.value, "Failed to publish to target queue")
+            }
+        }
+    )
+
+    /**
+     * Safely deletes multiple messages identified by their IDs from a specified queue.
+     *
+     * This function provides a batch operation capability for safely deleting multiple messages
+     * identified by a list of message IDs. It fetches all candidate messages from the queue,
+     * filters those matching the provided IDs, and processes them through the safe operation
+     * coordinator to ensure reliability and consistency even in failure scenarios.
+     *
+     * @param messageIds List of unique identifiers for the messages to delete.
+     * @param queueName The name of the queue from which the messages will be deleted.
+     * @param connection The RabbitMQ connection used for the operation.
+     * @return An `OperationSummary` indicating the overall success or failure of the batch deletion.
+     */
+    suspend fun safeDeleteMessages(
+        messageIds: List<CompositeMessageId>,
+        queueName: String,
+        connection: RabbitMQConnection,
+    ): OperationSummary = safeOperationCoordinator.executeOperation(
+        operationType = "delete-messages",
+        messagesProvider = {
+            rabbitClient.getMessages(queueName, Int.MAX_VALUE, true, connection)
+                .filter { message -> messageIds.any { it == message.id } }
+        },
+        processor = { message ->
+            val success = rabbitClient.publishMessage(
+                message.exchange,
+                message.routingKey,
+                message.payload,
+                connection
+            )
+
+            if (success) {
+                ProcessingResult.Success(message.id.value)
+            } else {
+                ProcessingResult.Failure(message.id.value, "Failed to create backup of deleted message")
             }
         }
     )

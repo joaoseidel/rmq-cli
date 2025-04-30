@@ -10,7 +10,6 @@ class Root : SuspendingCliktCommand("queue") {
             Search(),
             Inspect(),
             Requeue(),
-            Reprocess(),
             Consume(),
             Export(),
             Purge(),

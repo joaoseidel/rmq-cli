@@ -8,6 +8,7 @@ import com.github.ajalt.mordant.terminal.danger
 import com.github.ajalt.mordant.terminal.success
 import com.github.ajalt.mordant.terminal.warning
 import io.joaoseidel.rmq.clikt.CliktCommandWrapper
+import io.joaoseidel.rmq.clikt.askConfirmation
 import io.joaoseidel.rmq.clikt.error
 import io.joaoseidel.rmq.clikt.formatCount
 import io.joaoseidel.rmq.clikt.formatName
@@ -32,17 +33,30 @@ class Purge : CliktCommandWrapper("purge") {
             }
 
             if (!force) {
-                terminal.warning("Queue $queueName contains ${terminal.formatCount(queue.totalMessages.toInt(), "message")}.")
-                terminal.warning("Are you sure you want to purge this queue? All messages will be permanently deleted. (y/N)")
-                val response = readLine()?.lowercase()
-                if (response != "y" && response != "yes") {
+                terminal.warning(
+                    "Queue $queueName contains ${
+                        terminal.formatCount(
+                            queue.totalMessages.toInt(),
+                            "message"
+                        )
+                    }."
+                )
+
+                if (terminal.askConfirmation("Are you sure you want to purge this queue? All messages will be permanently deleted.")) {
                     terminal.danger("Operation cancelled.")
                     return@withConnection
                 }
             }
 
             if (queueOperations.purgeQueue(queueName, connection)) {
-                terminal.success("Purged queue $queueName. ${terminal.formatCount(queue.totalMessages.toInt(), "message")} were removed.")
+                terminal.success(
+                    "Purged queue $queueName. ${
+                        terminal.formatCount(
+                            queue.totalMessages.toInt(),
+                            "message"
+                        )
+                    } were removed."
+                )
             } else {
                 terminal.error("Failed to purge queue ${terminal.formatName(queueName)}. Check if the queue exists or if there are connection issues.")
             }

@@ -7,11 +7,7 @@ import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.terminal.success
 import com.github.ajalt.mordant.terminal.warning
-import io.joaoseidel.rmq.clikt.CliktCommandWrapper
-import io.joaoseidel.rmq.clikt.error
-import io.joaoseidel.rmq.clikt.formatCount
-import io.joaoseidel.rmq.clikt.formatName
-import io.joaoseidel.rmq.clikt.formatProperty
+import io.joaoseidel.rmq.clikt.*
 import io.joaoseidel.rmq.core.usecase.QueueOperations
 import kotlinx.coroutines.runBlocking
 import org.koin.java.KoinJavaComponent.inject
@@ -23,7 +19,6 @@ class Requeue : CliktCommandWrapper("requeue") {
     private val toQueue by option("--to", help = "Name of the queue to reprocess a message to").required()
     private val limit by option("--limit", help = "Limit of messages to reprocess").int()
     private val all by option("--all", help = "Reprocess all messages in the queue").flag()
-    private val unsafe by option("--unsafe", help = "Use unsafe mode without backup (not recommended)").flag()
 
     override suspend fun run() {
         withConnection {
@@ -41,31 +36,38 @@ class Requeue : CliktCommandWrapper("requeue") {
 
             val messageLimit = if (all) Int.MAX_VALUE else limit!!
 
-            if (unsafe) {
-                val requeueMessages = queueOperations.requeueMessages(fromQueue, toQueue, messageLimit, it)
-                if (requeueMessages > 0) {
-                    val formatCount = terminal.formatCount(requeueMessages, "message")
-                    terminal.success("Requeued $formatCount from queue $fromQueue to $toQueue.")
-                    return@withConnection
-                }
-
-                terminal.error("Failed to requeue messages from queue ${terminal.formatName(fromQueue)}. Check if the queue is empty or if there are connection issues.")
-                return@withConnection
-            }
-
-            val operationResult = runBlocking {
+            val requeueMessagesSummary = runBlocking {
                 queueOperations.safeRequeueMessages(fromQueue, toQueue, messageLimit, it)
             }
 
-            if (operationResult.successful > 0) {
-                val formatCount = terminal.formatCount(operationResult.successful, "message")
+            if (requeueMessagesSummary.successful > 0) {
+                var formatCount = terminal.formatCount(requeueMessagesSummary.successful, "message")
                 terminal.success("Requeued $formatCount from queue $fromQueue to $toQueue.")
+
+                if (terminal.askConfirmation("Do you want to remove the messages from the queue now?")) {
+                    val messageIdList = requeueMessagesSummary.processedMessages.map { it.id }
+
+                    val deleteMessagesSummary = runBlocking {
+                        queueOperations.safeDeleteMessages(messageIdList, fromQueue, it)
+                    }
+
+                    if (deleteMessagesSummary.successful > 0) {
+                        formatCount = terminal.formatCount(deleteMessagesSummary.successful, "message")
+                        terminal.success("Deleted $formatCount from queue $fromQueue.")
+                    }
+
+                    if (deleteMessagesSummary.failed > 0) {
+                        formatCount = terminal.formatCount(deleteMessagesSummary.successful, "message")
+                        terminal.warning("Failed to delete messages from queue $formatCount.")
+                        terminal.warning("The operation ${deleteMessagesSummary.id} was saved successfuly under the message_backup_operations file.")
+                    }
+                }
             }
 
-            if (operationResult.failed > 0) {
-                val formatCount = terminal.formatCount(operationResult.failed, "message")
+            if (requeueMessagesSummary.failed > 0) {
+                val formatCount = terminal.formatCount(requeueMessagesSummary.failed, "message")
                 terminal.error("Failed to requeue $formatCount from queue $fromQueue to $toQueue.")
-                terminal.warning("The operation ${operationResult.id} was saved successfuly under the message_backup_operations file.")
+                terminal.warning("The operation ${requeueMessagesSummary.id} was saved successfuly under the message_backup_operations file.")
             }
         }
     }

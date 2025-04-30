@@ -12,6 +12,7 @@ import io.joaoseidel.rmq.clikt.CliktCommandWrapper
 import io.joaoseidel.rmq.clikt.error
 import io.joaoseidel.rmq.clikt.formatCount
 import io.joaoseidel.rmq.clikt.formatName
+import io.joaoseidel.rmq.clikt.askConfirmation
 import io.joaoseidel.rmq.core.domain.CompositeMessageId
 import io.joaoseidel.rmq.core.usecase.MessageOperations
 import kotlinx.coroutines.runBlocking
@@ -33,10 +34,8 @@ class Delete : CliktCommandWrapper("delete") {
         if (!force) {
             val messageIdFormatted = terminal.formatName(messageId.value)
             val queueNameFormatted = terminal.formatName(queueName)
-            terminal.warning("Are you sure you want to delete message $messageIdFormatted from queue $queueNameFormatted? (y/N)")
 
-            val response = readlnOrNull()?.lowercase()
-            if (response != "y" && response != "yes") {
+            if (terminal.askConfirmation("Are you sure you want to delete message $messageIdFormatted from queue $queueNameFormatted?")) {
                 terminal.danger("Operation cancelled.")
                 return
             }

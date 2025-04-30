@@ -10,7 +10,6 @@ class Root : SuspendingCliktCommand("message") {
             Search(),
             Publish(),
             Requeue(),
-            Reprocess(),
             Delete(),
         )
     }

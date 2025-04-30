@@ -54,12 +54,12 @@ class FlowSafeOperationCoordinator : SafeOperationCoordinator {
         val messages = messagesProvider()
         if (messages.isEmpty()) {
             logger.debug { "No messages to process for operation $operationId" }
-            return OperationSummary(operationId, 0, 0, emptyList())
+            return OperationSummary(operationId, 0, 0)
         }
 
         if (!messageBackupRepository.storeMessages(operationId, operationType, messages)) {
             logger.error { "Failed to backup messages for operation $operationId" }
-            return OperationSummary(operationId, 0, 0, messages)
+            return OperationSummary(operationId, 0, 0, unprocessedMessages = messages)
         }
 
         data class ProcessingStats(
@@ -78,6 +78,7 @@ class FlowSafeOperationCoordinator : SafeOperationCoordinator {
                     }
                 }
 
+        val processedMessage = messageBackupRepository.getProcessedMessages(operationId)
         val unprocessedMessages = messageBackupRepository.getUnprocessedMessages(operationId)
         messageBackupRepository.completeOperation(operationId)
 
@@ -85,6 +86,7 @@ class FlowSafeOperationCoordinator : SafeOperationCoordinator {
             id = operationId,
             successful = stats.successes,
             failed = stats.failures,
+            processedMessages = processedMessage,
             unprocessedMessages = unprocessedMessages,
         )
     }

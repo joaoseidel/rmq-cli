@@ -77,6 +77,14 @@ class JsonMessageBackupRepository(
         }
     }
 
+    override fun getProcessedMessages(operationId: UUID): List<Message> {
+        val entity = findOperationEntity(operationId) ?: return emptyList()
+
+        return entity.messages.filter { message ->
+            entity.processedMessageIds.contains(message.id.value)
+        }
+    }
+
     override fun completeOperation(operationId: UUID): Boolean {
         val entity = findOperationEntity(operationId) ?: return false
 
