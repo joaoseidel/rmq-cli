@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/joaoseidel/rmq-cli/compare/v1.5.0...v1.6.0) (2025-10-01)
+
+
+### Features
+
+* add import subcommand to queue command ([9d8a05d](https://github.com/joaoseidel/rmq-cli/commit/9d8a05d1845d46e6a93ff2619613cdebab8f14eb))
+
 # [1.5.0](https://github.com/joaoseidel/rmq-cli/compare/v1.4.0...v1.5.0) (2025-04-30)
 
 
