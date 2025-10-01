@@ -12,6 +12,7 @@ class Root : SuspendingCliktCommand("queue") {
             Requeue(),
             Consume(),
             Export(),
+            Import(),
             Purge(),
         )
     }
