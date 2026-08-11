@@ -44,7 +44,7 @@ so `rmq` is a browser.
 
 ## Install
 
-Requires Node.js 20 or newer. Nothing to install — run it:
+Requires Node.js 22 or newer. Nothing to install — run it:
 
 ```bash
 npx rmq-cli

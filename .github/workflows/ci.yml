@@ -7,7 +7,6 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # A newer push supersedes an in-flight run for the same ref.
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
@@ -18,8 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor declared in package.json engines, and current LTS.
-        node: ["20", "lts/*"]
+        node: ["22", "lts/*"]
 
     steps:
       - name: Checkout
