@@ -16,7 +16,7 @@
       "@semantic-release/exec",
       {
         "prepareCmd": "node scripts/sync-alias-version.mjs ${nextRelease.version}",
-        "publishCmd": "npm publish npm/rmq-alias"
+        "publishCmd": "npm publish ./npm/rmq-alias"
       }
     ],
     [

@@ -13,7 +13,7 @@
     "url": "https://github.com/joaoseidel/rmq-cli/issues"
   },
   "bin": {
-    "rmq": "./dist/bin/rmq.js"
+    "rmq": "dist/bin/rmq.js"
   },
   "engines": {
     "node": ">=22"

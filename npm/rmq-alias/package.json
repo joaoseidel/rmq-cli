@@ -14,7 +14,7 @@
     "url": "https://github.com/joaoseidel/rmq-cli/issues"
   },
   "bin": {
-    "rmq": "./bin/rmq.js"
+    "rmq": "bin/rmq.js"
   },
   "engines": {
     "node": ">=22"
