@@ -1,3 +1,11 @@
+# [2.1.0](https://github.com/joaoseidel/rmq-cli/compare/v2.0.0...v2.1.0) (2026-08-11)
+
+
+### Features
+
+* add cross-queue message search with depth controls ([113dca2](https://github.com/joaoseidel/rmq-cli/commit/113dca2153af77c50130e32c02a414e68e10649e))
+* search messages across every filtered queue ([64a6f01](https://github.com/joaoseidel/rmq-cli/commit/64a6f013bc65d877875928f843bb73160a96f914))
+
 # [2.0.0](https://github.com/joaoseidel/rmq-cli/compare/v1.6.0...v2.0.0) (2026-08-11)
 
 - feat!: rewrite CLI as TypeScript/Ink fullscreen TUI ([a85619f](https://github.com/joaoseidel/rmq-cli/commit/a85619f78aca37794397c2c915f17f001b70775c))
