@@ -1,19 +1,5 @@
 import { createHash } from "node:crypto";
 
-/**
- * Byte layout of a composite message id. The total is 20 bytes, rendered as a
- * 40-character lowercase hex string.
- *
- * ```
- *  0        8               16        20
- *  ├────────┼───────────────┼─────────┤
- *  │ tag    │ routing hash  │ content │
- *  │ i64 BE │ sha256[0..8]  │ sha[..4]│
- * ```
- *
- * This layout is wire-compatible with the original Kotlin implementation, so ids
- * minted by either version address the same message.
- */
 const DELIVERY_TAG_SIZE = 8;
 const ROUTING_INFO_SIZE = 8;
 const CONTENT_HASH_SIZE = 4;

@@ -10,17 +10,9 @@ export interface FilterBarProps {
   readonly onCancel: () => void;
   readonly active: boolean;
   readonly label?: string;
-  /** Result count shown once a filter has been applied. */
   readonly matchCount?: number;
 }
 
-/**
- * The `/` filter line.
- *
- * Stays visible after submission, showing the applied term and its match count,
- * so the list is never silently filtered — the commonest way to be confused by
- * an empty result.
- */
 export function FilterBar({
   value,
   onChange,
@@ -30,8 +22,6 @@ export function FilterBar({
   label = "filter",
   matchCount,
 }: FilterBarProps) {
-  // Claimed unconditionally rather than after the early return, so the hook runs
-  // on every render regardless of whether the bar is visible.
   useCaptureInput(active);
 
   if (!active && value === "") return null;

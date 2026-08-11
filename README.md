@@ -4,8 +4,8 @@ A full-screen terminal application for working with RabbitMQ, built with
 [Ink](https://github.com/vadimdemedes/ink).
 
 Run `rmq` and you get an interactive browser: queues on the left, messages one
-keystroke away, and every operation — publishing, purging, moving messages,
-exporting to disk, live tailing — driven from inside the app. There are no
+keystroke away, and every operation (publishing, purging, moving messages,
+exporting to disk, live tailing) driven from inside the app. There are no
 subcommands and no flags to memorise.
 
 ```
@@ -33,7 +33,7 @@ taking a copy of a queue before you touch it.
 
 Those are exploratory tasks. You do not know the queue name in advance, you page
 through messages until you find the interesting one, and each step depends on
-what the last one showed. That is a browsing problem, not a scripting problem —
+what the last one showed. That is a browsing problem, not a scripting problem,
 so `rmq` is a browser.
 
 > **Version 2 is a rewrite.** Up to 1.5 `rmq` was a Kotlin/Gradle CLI with
@@ -44,7 +44,7 @@ so `rmq` is a browser.
 
 ## Install
 
-Requires Node.js 22 or newer. Nothing to install — run it:
+Requires Node.js 22 or newer. Nothing to install, just run it:
 
 ```bash
 npx rmq-cli
@@ -80,7 +80,7 @@ npm link           # or build and put `rmq` on your PATH
 
 ## Getting started
 
-On first run — with no connection configured — `rmq` opens on the connection
+On first run, with no connection configured, `rmq` opens on the connection
 form. Fill it in, press Enter, and the connection is tested against the broker
 before it is saved. A connection that cannot connect is never stored.
 
@@ -88,24 +88,40 @@ From then on `rmq` opens on the queue list for your default connection.
 
 ## Keys
 
-Press `?` inside the app for the full reference, or `:` to open the action list,
-which is searchable and shows everything available from the current screen.
+Press `?` for the keys of the screen you are on. The help page leads with that
+screen's own bindings, then the ones that work anywhere, or `:` to open the
+action list, which is searchable and shows everything available from here.
 
-| Key           | Does                                                     |
-| ------------- | -------------------------------------------------------- |
-| `:`           | open the action list — the reliable way to find anything |
-| `?`           | key reference                                            |
-| `↑ ↓` / `j k` | move the cursor                                          |
-| `⏎`           | open the selected queue or message                       |
-| `/`           | filter the current list; `⏎` applies, `esc` clears       |
-| `s`           | search messages across every filtered queue at once      |
-| `r`           | re-read from the broker                                  |
-| `esc`         | back one screen                                          |
-| `q`           | back, or quit from the queue list                        |
+| Key           | Does                                                    |
+| ------------- | ------------------------------------------------------- |
+| `:`           | open the action list, the reliable way to find anything |
+| `.`           | actions for the row under the cursor                    |
+| `?`           | key reference                                           |
+| `↑ ↓` / `j k` | move the cursor                                         |
+| `⏎`           | open the selected queue or message                      |
+| `/`           | filter the current list; `⏎` applies, `esc` clears      |
+| `s`           | search messages across every filtered queue at once     |
+| `r`           | re-read from the broker                                 |
+| `esc`         | back one screen                                         |
+| `q`           | back, or quit from the queue list                       |
+
+The footer shows the keys the current screen actually binds, and always keeps
+`: actions`, `? help`, and the way back. Those survive a narrow terminal even
+when the screen's own keys have to be dropped to fit.
 
 On the queue list: `s` search across the filtered queues, `p` purge, `t` live
 tail, `e` export, `i` import, `w` publish, `m` move messages, `c` connections,
 `v` virtual hosts.
+
+On any list: `space` marks the row and steps to the next one, `a` marks or
+unmarks everything the filter leaves. Marked rows are shown with a `✓` in a
+gutter and counted under the table. Marks are dropped when you leave the list,
+so they never follow you onto another screen.
+
+`.` opens a menu over the current row listing only what applies to it: queue
+actions for a queue, message actions for a message. `Ctrl+Enter` would be the
+obvious chord for this, but terminals send a plain carriage return for it and it
+cannot be told apart from `Enter`, so `.` is the binding.
 
 On a queue or an open message: `d` delete, `M` move it to another queue, `R`
 reprocess it to its original exchange.
@@ -113,15 +129,20 @@ reprocess it to its original exchange.
 On search results: `+` / `-` search deeper or shallower, `r` re-run the same
 search, `/` start a new one.
 
+On connections: `a` add, `d` make default, `x` remove. On the live tail: `space`
+pause, `x` clear.
+
 ## What it does
 
-**Queues** — browse, filter by glob, inspect depths, purge, and tail live.
+**Queues.** Browse, filter by glob, inspect depths, purge, and tail live.
 
-**Messages** — page through a queue without consuming anything, read payloads
+**Messages.** Page through a queue without consuming anything, read payloads
 with JSON pretty-printed, filter by content, delete, move to another queue, or
-reprocess to the original exchange.
+reprocess to the original exchange. Filtering and search cover the payload, the
+message id, the routing key, and the headers and properties (correlation ids
+usually live in the headers, not the body), and ignore case.
 
-**Search** — `/` narrows the queue list to the queues worth looking in; `s` then
+**Search.** `/` narrows the queue list to the queues worth looking in; `s` then
 searches all of them at once for a payload or a message id. Results stream in
 queue by queue, showing which queue each hit came from, and `⏎` opens the hit
 where every message action is already available.
@@ -144,27 +165,39 @@ search: AB-991 (3 matching)
 
 The search reads at most 200 messages per queue and says so. When a queue fills
 that cap the screen names it, because a search that stopped short is not
-evidence the message was never there — and `+` re-runs deeper (100, 200, 500,
+evidence the message was never there, and `+` re-runs deeper (100, 200, 500,
 1000, 5000, 10000), `-` shallower. Queues that cannot be read are reported
 individually and the rest are searched anyway.
 
 ```
-! 1 queue hit the 200-message cap (order-dlq) — press + to search deeper
+! 1 queue hit the 200-message cap (order-dlq). Press + to search deeper
 ```
 
-**Publishing** — send to a queue or to an exchange with a routing key, with the
+**Publishing.** Send to a queue or to an exchange with a routing key, with the
 body typed inline or read from a file.
 
-**Files** — export a queue to JSON (leaving it untouched by default) and import
-that file back into any queue.
+**Files.** Export a queue to JSON (every message, leaving the queue untouched,
+unless you ask otherwise) and import that file back into any queue.
 
-**Connections** — add, remove, and switch between brokers and virtual hosts, all
+**Bulk actions.** Mark rows with `space`, then act on all of them at once.
+Marked queues purge together; marked messages delete, move, or reprocess
+together. When nothing is marked the action applies to the row under the cursor,
+so the single-message case needs no marking at all.
+
+Batching is not only convenience. Removing a message means draining the queue
+and republishing everything that was not targeted, so deleting five messages one
+at a time meant five full round trips over the queue; marked messages are
+removed in a single pass. The confirmation names what it is about to destroy,
+`Purge 2 queues (order-failed, order-dlq), 41 messages?` rather than just
+counting it.
+
+**Connections.** Add, remove, and switch between brokers and virtual hosts, all
 without leaving the app.
 
 ### Safety
 
 Browsing never consumes. Messages are read without acknowledgement, so anything
-you look at — including a live tail — is still on the broker when you close the
+you look at, including a live tail, is still on the broker when you close the
 screen.
 
 Only purge, delete, move, and export-with-removal change anything, and each asks
@@ -186,12 +219,20 @@ and the app tells you when that has happened rather than reporting success.
 Moves publish the copy before removing the original, so an interruption
 duplicates a message rather than losing it.
 
+**Publishes are confirmed, not assumed.** A message is only treated as delivered
+once the broker has both confirmed it and not returned it as unroutable, so a
+destination nothing is bound to is reported as a failure instead of success.
+Destination fields complete against the queues that actually exist (type a
+prefix and press `→`), and a name the broker does not have is refused before
+anything is taken off the source queue. Publishing to a queue whose name has a
+typo in it used to discard every message and report that the move had worked.
+
 ### Connection types
 
 **AMQP** is the default and supports everything.
 
 **HTTP** talks to the management API only. Queue and message operations work,
-but live tailing does not — the management API cannot stream. The action list
+but live tailing does not, because the management API cannot stream. The action list
 greys out anything unavailable and says why, rather than hiding it.
 
 ## Configuration
@@ -202,7 +243,7 @@ Set `RMQ_HOME` to relocate it.
 Broker passwords are encrypted with AES-256-GCM before they are written. The key
 is generated on first run and kept in `~/.rmq-cli/key`, also at `0600`; settings
 carrying a plaintext password from an older version are re-encrypted the next
-time `rmq` starts. This guards against casual disclosure — a synced dotfile
+time `rmq` starts. This guards against casual disclosure: a synced dotfile
 directory, a home backup, a `cat settings.json` over someone's shoulder. It is
 not a defence against an attacker who can already read your home directory,
 since the key sits beside the data.
@@ -212,7 +253,7 @@ be recovered. A connection whose password fails to decrypt still appears in the
 list, with an empty password to re-enter.
 
 Diagnostics go to `~/.rmq-cli/rmq-cli.log`; `RMQ_LOG_LEVEL` accepts `debug`,
-`info`, `warn`, or `error`. Nothing is ever logged to stdout — Ink owns the
+`info`, `warn`, or `error`. Nothing is ever logged to stdout, because Ink owns the
 screen, and a stray write corrupts the frame.
 
 ## Development
@@ -228,7 +269,7 @@ CI runs the same three checks on Node 20 and current LTS for every push and pull
 request. Releases are cut manually with the **Create Semantic Release** workflow,
 which derives the version from the commit history, updates `CHANGELOG.md` and
 `package.json`, and attaches a packed tarball to the GitHub release. It does not
-publish to the npm registry — flip `npmPublish` in `.releaserc.json` and add an
+publish to the npm registry; flip `npmPublish` in `.releaserc.json` and add an
 `NPM_TOKEN` if you want that.
 
 A RabbitMQ instance with sample data is available for local work:
@@ -276,7 +317,7 @@ Use `src/ui/hooks/use-key-handler.ts` rather than Ink's `useInput` directly.
 
 Ink subscribes its keypress listener in an effect keyed only on `isActive`, so
 the callback it retains is the one from the render where the subscription
-happened — every later closure, and every piece of state it reads, is ignored.
+happened; every later closure, and every piece of state it reads, is ignored.
 In practice a text field reads back its initial empty value on each keystroke and
 a list acts on whichever row was selected when the screen first appeared.
 `useKeyHandler` routes through a ref, so handlers always see the current render's
@@ -284,7 +325,7 @@ values. `test/text-input.test.tsx` covers the regression.
 
 ## License
 
-Apache 2.0 — see `LICENSE`.
+Apache 2.0, see `LICENSE`.
 
 ## Contributing
 

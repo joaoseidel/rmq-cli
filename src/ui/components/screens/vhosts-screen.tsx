@@ -21,12 +21,6 @@ export interface VHostsScreenProps {
   readonly isActive: boolean;
 }
 
-/**
- * Virtual host switcher.
- *
- * Selecting one repoints the saved connection, which is what every subsequent
- * queue listing is scoped to.
- */
 export function VHostsScreen({
   broker,
   vhosts,

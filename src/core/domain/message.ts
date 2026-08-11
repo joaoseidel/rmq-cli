@@ -22,7 +22,6 @@ export type Message = Omit<z.infer<typeof MessageSchema>, "id"> & {
 
 export const DEFAULT_EXCHANGE = "amq.default";
 
-/** Property names lifted off an AMQP basic-properties frame, in display order. */
 const AMQP_PROPERTY_KEYS = [
   "contentType",
   "contentEncoding",

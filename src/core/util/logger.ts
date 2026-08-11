@@ -3,14 +3,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { errorMessage } from "./text.ts";
 
-/**
- * File-only logger.
- *
- * Ink owns stdout while a command renders, so diagnostics must never be written
- * there — a stray `console.log` corrupts the frame. Everything goes to
- * `~/.rmq-cli/rmq-cli.log` instead, and logging failures are swallowed: a broken
- * log file must not take down the CLI.
- */
 const LEVELS = ["debug", "info", "warn", "error"] as const;
 export type LogLevel = (typeof LEVELS)[number];
 
@@ -52,9 +44,7 @@ function write(
 
   try {
     appendFileSync(logFile, line, "utf8");
-  } catch {
-    // A CLI that cannot write its log file should still do its job.
-  }
+  } catch {}
 }
 
 export interface Logger {

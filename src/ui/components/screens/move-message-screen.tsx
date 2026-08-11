@@ -10,10 +10,11 @@ import type {
 } from "../../../core/usecase/message-operations.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import { useAsyncAction } from "../../hooks/use-async-action.ts";
+import { useQueueNames } from "../../hooks/use-queue-names.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { toSingleLine, truncateToWidth } from "../../utils/width.ts";
 import { Confirm } from "../common/confirm.tsx";
-import { Form, required, type FormField } from "../common/form.tsx";
+import { Form, mustBeKnown, type FormField } from "../common/form.tsx";
 import { Spinner } from "../parts/spinner.tsx";
 import { Muted, Name, StatusMessage } from "../parts/status-message.tsx";
 
@@ -22,51 +23,57 @@ export type MoveMode = "move" | "reprocess";
 export interface MoveMessageScreenProps {
   readonly mode: MoveMode;
   readonly broker: BrokerClient;
-  readonly messages: MessageOperations;
+  readonly operations: MessageOperations;
   readonly connection: ConnectionInfo;
   readonly queue: Queue;
-  readonly message: Message;
+  readonly messages: readonly Message[];
   readonly onDone: (summary: string, tone: "success" | "danger") => void;
   readonly onCancel: () => void;
   readonly isActive: boolean;
 }
 
-const MOVE_FIELDS: FormField[] = [
-  {
-    name: "to",
-    label: "To queue",
-    placeholder: "retry-queue",
-    validate: required("Destination queue"),
-  },
-];
+function moveFields(queueNames: readonly string[]): FormField[] {
+  return [
+    {
+      name: "to",
+      label: "To queue",
+      suggestions: queueNames,
+      validate: mustBeKnown("Destination queue", queueNames),
+    },
+  ];
+}
 
-/** One line describing what is about to happen, for the confirmation. */
 function describe(
   mode: MoveMode,
-  message: Message,
+  messages: readonly Message[],
   queue: Queue,
   destination: string,
 ): string {
-  return mode === "move"
-    ? `Move this message from '${queue.name}' to '${destination}'?`
-    : `Republish this message to '${displayExchange(message)}' and remove it from '${queue.name}'?`;
+  const what =
+    messages.length === 1
+      ? "this message"
+      : formatCount(messages.length, "message");
+
+  if (mode === "move") {
+    return `Move ${what} from '${queue.name}' to '${destination}'?`;
+  }
+
+  const exchanges = new Set(messages.map(displayExchange));
+  const where =
+    exchanges.size === 1
+      ? `'${[...exchanges][0]}'`
+      : `${exchanges.size} exchanges`;
+
+  return `Republish ${what} to ${where} and remove ${messages.length === 1 ? "it" : "them"} from '${queue.name}'?`;
 }
 
-/**
- * Moves or reprocesses a single message, with the message itself on screen.
- *
- * Both operations publish a copy and then remove the original, which means
- * draining and restoring the source queue. The confirmation says so, and the
- * result reports what came back — a silent "done" would be untrustworthy for an
- * operation that briefly holds an entire queue in memory.
- */
 export function MoveMessageScreen({
   mode,
   broker,
-  messages,
+  operations,
   connection,
   queue,
-  message,
+  messages,
   onDone,
   onCancel,
   isActive,
@@ -74,19 +81,20 @@ export function MoveMessageScreen({
   const [destination, setDestination] = useState<string | null>(
     mode === "reprocess" ? "" : null,
   );
+  const queueNames = useQueueNames(broker, connection);
 
   const action = useAsyncAction(
     async (target: string): Promise<RemovalOutcome> =>
       broker.withConnection(connection, (open) =>
         mode === "move"
-          ? messages.safeRequeueMessage({
-              message,
+          ? operations.safeMoveMessages({
+              messages,
               fromQueue: queue.name,
               toQueue: target,
               connection: open,
             })
-          : messages.safeReprocessMessage({
-              message,
+          : operations.safeReprocessMessages({
+              messages,
               fromQueue: queue.name,
               connection: open,
             }),
@@ -101,7 +109,7 @@ export function MoveMessageScreen({
 
     if (outcome.lost > 0) {
       onDone(
-        `${outcome.removed} moved, but ${formatCount(outcome.lost, "message")} could not be put back — ` +
+        `${outcome.removed} moved, but ${formatCount(outcome.lost, "message")} could not be put back, ` +
           `saved under operation ${outcome.operationId}.`,
         "danger",
       );
@@ -110,8 +118,8 @@ export function MoveMessageScreen({
 
     onDone(
       mode === "move"
-        ? `Moved 1 message out of ${queue.name}${outcome.restored > 0 ? `, ${formatCount(outcome.restored, "message")} left untouched` : ""}.`
-        : `Reprocessed 1 message from ${queue.name}.`,
+        ? `Moved ${formatCount(outcome.removed, "message")} out of ${queue.name}${outcome.restored > 0 ? `, ${formatCount(outcome.restored, "message")} left untouched` : ""}.`
+        : `Reprocessed ${formatCount(outcome.removed, "message")} from ${queue.name}.`,
       "success",
     );
   }, [outcome, onDone, mode, queue.name]);
@@ -123,34 +131,47 @@ export function MoveMessageScreen({
   if (action.state.status === "running") {
     return (
       <Spinner
-        label={mode === "move" ? "Moving the message…" : "Reprocessing…"}
+        label={
+          mode === "move"
+            ? `Moving ${formatCount(messages.length, "message")}…`
+            : `Reprocessing ${formatCount(messages.length, "message")}…`
+        }
       />
     );
   }
 
+  const shown = messages.slice(0, 4);
+
   const preview = (
     <Box flexDirection="column" marginBottom={1}>
       <Text color={theme.muted}>
-        {glyphs.bullet} {message.id}
+        {glyphs.bullet} {formatCount(messages.length, "message")} from{" "}
+        {queue.name}
       </Text>
-      <Text color={theme.muted}>
-        {glyphs.bullet} {displayExchange(message)} {glyphs.arrowRight}{" "}
-        {message.routingKey}
-      </Text>
-      <Text>
-        {"  "}
-        <Muted>{truncateToWidth(toSingleLine(message.payload), 100)}</Muted>
-      </Text>
+      {shown.map((entry) => (
+        <Text key={entry.id}>
+          {"  "}
+          <Muted>
+            {displayExchange(entry)} {glyphs.arrowRight} {entry.routingKey}
+            {"  "}
+            {truncateToWidth(toSingleLine(entry.payload), 80)}
+          </Muted>
+        </Text>
+      ))}
+      {messages.length > shown.length ? (
+        <Text color={theme.muted}>
+          {"  "}… and {messages.length - shown.length} more
+        </Text>
+      ) : null}
     </Box>
   );
 
-  // Reprocess has no destination to pick, so it goes straight to the prompt.
   if (destination === null) {
     return (
       <Box flexDirection="column">
         {preview}
         <Form
-          fields={MOVE_FIELDS}
+          fields={moveFields(queueNames)}
           isActive={isActive}
           submitLabel="review"
           onCancel={onCancel}
@@ -168,7 +189,7 @@ export function MoveMessageScreen({
         taken out. Every other message goes back.
       </StatusMessage>
       <Confirm
-        message={describe(mode, message, queue, destination)}
+        message={describe(mode, messages, queue, destination)}
         isActive={isActive}
         onAnswer={(confirmed) => {
           if (confirmed) action.run(destination);

@@ -17,9 +17,15 @@ import { FakeBroker, testConnection } from "./fake-broker.ts";
 function build(seed: Record<string, string[]>) {
   const broker = new FakeBroker(seed);
   const backups = new JsonMessageBackupRepository(
-    new JsonSettingsStore({ configDir: mkdtempSync(join(tmpdir(), "rmq-msg-")), fileName: "backups" }),
+    new JsonSettingsStore({
+      configDir: mkdtempSync(join(tmpdir(), "rmq-msg-")),
+      fileName: "backups",
+    }),
   );
-  const messages = new MessageOperations(broker, new BackedUpOperationCoordinator(backups));
+  const messages = new MessageOperations(
+    broker,
+    new BackedUpOperationCoordinator(backups),
+  );
   return { broker, messages, backups };
 }
 
@@ -38,15 +44,19 @@ describe("removing a message from a queue", () => {
   });
 
   it("removes only the targeted message", async () => {
-    // The operation drains the queue and republishes the bystanders. Getting the
-    // filter backwards destroys the queue, so this is the load-bearing test.
     const { broker, messages } = context;
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
     const target = all[1];
     expect(target).toBeDefined();
 
     await withConnection(broker, (open) =>
-      messages.safeDeleteMessage({ id: target!.id, queueName: "orders", connection: open }),
+      messages.safeDeleteMessage({
+        id: target!.id,
+        queueName: "orders",
+        connection: open,
+      }),
     );
 
     expect(broker.payloads("orders")).toEqual(["a", "c", "d"]);
@@ -54,10 +64,16 @@ describe("removing a message from a queue", () => {
 
   it("preserves the order of the messages it puts back", async () => {
     const { broker, messages } = context;
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
     await withConnection(broker, (open) =>
-      messages.safeDeleteMessage({ id: all[0]!.id, queueName: "orders", connection: open }),
+      messages.safeDeleteMessage({
+        id: all[0]!.id,
+        queueName: "orders",
+        connection: open,
+      }),
     );
 
     expect(broker.payloads("orders")).toEqual(["b", "c", "d"]);
@@ -65,10 +81,16 @@ describe("removing a message from a queue", () => {
 
   it("reports what it removed and what it restored", async () => {
     const { broker, messages } = context;
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
     const outcome = await withConnection(broker, (open) =>
-      messages.safeDeleteMessage({ id: all[2]!.id, queueName: "orders", connection: open }),
+      messages.safeDeleteMessage({
+        id: all[2]!.id,
+        queueName: "orders",
+        connection: open,
+      }),
     );
 
     expect(outcome.removed).toBe(1);
@@ -78,7 +100,9 @@ describe("removing a message from a queue", () => {
 
   it("removes several messages in one pass", async () => {
     const { broker, messages } = context;
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
     const outcome = await withConnection(broker, (open) =>
       messages.removeFromQueue({
@@ -95,7 +119,6 @@ describe("removing a message from a queue", () => {
   it("leaves the queue alone when the id is not present", async () => {
     const { broker, messages } = context;
 
-    // An id that matches nothing must still put every message back.
     const outcome = await withConnection(broker, (open) =>
       messages.safeDeleteMessage({
         id: "0".repeat(40) as never,
@@ -110,13 +133,18 @@ describe("removing a message from a queue", () => {
 
   it("keeps unrestorable messages in the backup rather than dropping them", async () => {
     const { broker, messages, backups } = context;
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
-    // The broker refuses everything, so no bystander can be put back.
     broker.rejectPublishTo.add("orders");
 
     const outcome = await withConnection(broker, (open) =>
-      messages.safeDeleteMessage({ id: all[1]!.id, queueName: "orders", connection: open }),
+      messages.safeDeleteMessage({
+        id: all[1]!.id,
+        queueName: "orders",
+        connection: open,
+      }),
     );
 
     expect(outcome.lost).toBe(3);
@@ -128,7 +156,9 @@ describe("removing a message from a queue", () => {
 describe("moving a message to another queue", () => {
   it("publishes to the target and removes from the source", async () => {
     const { broker, messages } = build({ orders: ["a", "b", "c"], retry: [] });
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
     const outcome = await withConnection(broker, (open) =>
       messages.safeRequeueMessage({
@@ -145,10 +175,10 @@ describe("moving a message to another queue", () => {
   });
 
   it("leaves the source untouched when the target refuses the message", async () => {
-    // Publishing first means a failure costs nothing; removing first would lose
-    // the message entirely.
     const { broker, messages } = build({ orders: ["a", "b"], retry: [] });
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
     broker.rejectPublishTo.add("retry");
 
     await expect(
@@ -169,15 +199,20 @@ describe("moving a message to another queue", () => {
 describe("reprocessing a message", () => {
   it("republishes to the original routing key and removes the queued copy", async () => {
     const { broker, messages } = build({ orders: ["a", "b"] });
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
     const outcome = await withConnection(broker, (open) =>
-      messages.safeReprocessMessage({ message: all[0]!, fromQueue: "orders", connection: open }),
+      messages.safeReprocessMessage({
+        message: all[0]!,
+        fromQueue: "orders",
+        connection: open,
+      }),
     );
 
     expect(outcome.removed).toBe(1);
-    // The fake routes the default exchange straight back to the queue, so the
-    // republished copy lands at the end and the original is gone.
+
     expect(broker.payloads("orders")).toEqual(["b", "a"]);
   });
 });
@@ -200,7 +235,10 @@ describe("searching for a message across queues", () => {
       }),
     );
 
-    expect(outcome.hits.map((hit) => hit.queue)).toEqual(["order-processing", "order-failed"]);
+    expect(outcome.hits.map((hit) => hit.queue)).toEqual([
+      "order-processing",
+      "order-failed",
+    ]);
     expect(outcome.hits[0]!.message.payload).toContain("AB-991");
     expect(outcome.queuesScanned).toBe(3);
     expect(outcome.scanned).toBe(4);
@@ -217,18 +255,25 @@ describe("searching for a message across queues", () => {
       }),
     );
 
-    // The whole point of a search: it is safe to run against production.
-    expect(broker.payloads("order-processing")).toEqual(seed["order-processing"]);
+    expect(broker.payloads("order-processing")).toEqual(
+      seed["order-processing"],
+    );
     expect(broker.payloads("order-failed")).toEqual(seed["order-failed"]);
     expect(broker.payloads("order-dlq")).toEqual(seed["order-dlq"]);
   });
 
   it("matches on message id as well as payload", async () => {
     const { broker, messages } = build({ orders: ["a", "b"] });
-    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
 
     const outcome = await withConnection(broker, (open) =>
-      messages.searchMessages({ queueNames: ["orders"], term: all[1]!.id, connection: open }),
+      messages.searchMessages({
+        queueNames: ["orders"],
+        term: all[1]!.id,
+        connection: open,
+      }),
     );
 
     expect(outcome.hits).toHaveLength(1);
@@ -262,7 +307,6 @@ describe("searching for a message across queues", () => {
       }),
     );
 
-    // 'big' filled the cap, so a miss there would not have proved absence.
     expect(outcome.truncated).toEqual(["big"]);
     expect(outcome.hits).toHaveLength(4);
   });
@@ -281,8 +325,12 @@ describe("searching for a message across queues", () => {
 
     expect(outcome.failures).toHaveLength(1);
     expect(outcome.failures[0]!.queue).toBe("order-failed");
-    // One unreadable queue must not cost the results from the other two.
-    expect(outcome.hits.map((hit) => hit.queue)).toEqual(["order-processing", "order-processing", "order-dlq"]);
+
+    expect(outcome.hits.map((hit) => hit.queue)).toEqual([
+      "order-processing",
+      "order-processing",
+      "order-dlq",
+    ]);
   });
 
   it("reports partial results as each queue is finished", async () => {
@@ -316,7 +364,10 @@ describe("searching for a message across queues", () => {
 
     expect(outcome.cancelled).toBe(true);
     expect(outcome.queuesScanned).toBe(1);
-    expect(outcome.hits.map((hit) => hit.queue)).toEqual(["order-processing", "order-processing"]);
+    expect(outcome.hits.map((hit) => hit.queue)).toEqual([
+      "order-processing",
+      "order-processing",
+    ]);
   });
 });
 
@@ -330,8 +381,6 @@ describe("choosing how deep a search goes", () => {
     const shallowest = SEARCH_DEPTHS[0]!;
     const deepest = SEARCH_DEPTHS[SEARCH_DEPTHS.length - 1]!;
 
-    // Wrapping would silently turn "search deeper" into the shallowest scan
-    // there is, which is the opposite of what the key was pressed for.
     expect(stepSearchDepth(deepest, "deeper")).toBe(deepest);
     expect(stepSearchDepth(shallowest, "shallower")).toBe(shallowest);
   });
@@ -341,19 +390,151 @@ describe("choosing how deep a search goes", () => {
   });
 
   it("reaches messages a shallower run stopped short of", async () => {
-    const payloads = Array.from({ length: 250 }, (_, i) => (i === 240 ? "needle" : "hay"));
+    const payloads = Array.from({ length: 250 }, (_, i) =>
+      i === 240 ? "needle" : "hay",
+    );
     const { broker, messages } = build({ orders: payloads });
 
     const shallow = await withConnection(broker, (open) =>
-      messages.searchMessages({ queueNames: ["orders"], term: "needle", limitPerQueue: 200, connection: open }),
+      messages.searchMessages({
+        queueNames: ["orders"],
+        term: "needle",
+        limitPerQueue: 200,
+        connection: open,
+      }),
     );
     expect(shallow.hits).toHaveLength(0);
     expect(shallow.truncated).toEqual(["orders"]);
 
     const deep = await withConnection(broker, (open) =>
-      messages.searchMessages({ queueNames: ["orders"], term: "needle", limitPerQueue: 500, connection: open }),
+      messages.searchMessages({
+        queueNames: ["orders"],
+        term: "needle",
+        limitPerQueue: 500,
+        connection: open,
+      }),
     );
     expect(deep.hits).toHaveLength(1);
     expect(deep.truncated).toEqual([]);
+  });
+});
+
+describe("publishing to a destination that cannot receive", () => {
+  it("leaves the message in place when the destination does not exist", async () => {
+    const { broker, messages } = build({ orders: ["a", "b"] });
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
+
+    await expect(
+      withConnection(broker, (open) =>
+        messages.safeRequeueMessage({
+          message: all[0]!,
+          fromQueue: "orders",
+          toQueue: "retry-qeuue",
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/Failed to publish/);
+
+    expect(broker.payloads("orders")).toEqual(["a", "b"]);
+  });
+
+  it("keeps unroutable messages in the backup instead of reporting success", async () => {
+    const { broker, messages, backups } = build({ orders: ["a", "b", "c"] });
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
+
+    broker.rejectPublishTo.add("orders");
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.safeDeleteMessage({
+        id: all[0]!.id,
+        queueName: "orders",
+        connection: open,
+      }),
+    );
+
+    expect(outcome.lost).toBe(2);
+    expect(backups.getUnprocessedMessages(outcome.operationId)).toHaveLength(2);
+  });
+});
+
+describe("moving a batch of messages", () => {
+  it("removes the whole batch in a single pass over the source", async () => {
+    const { broker, messages } = build({
+      orders: ["a", "b", "c", "d"],
+      retry: [],
+    });
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.safeMoveMessages({
+        messages: [all[0]!, all[2]!],
+        fromQueue: "orders",
+        toQueue: "retry",
+        connection: open,
+      }),
+    );
+
+    expect(outcome.removed).toBe(2);
+
+    expect(outcome.restored).toBe(2);
+    expect(broker.payloads("orders")).toEqual(["b", "d"]);
+    expect(broker.payloads("retry")).toEqual(["a", "c"]);
+  });
+
+  it("removes nothing when the destination refuses the batch", async () => {
+    const { broker, messages } = build({ orders: ["a", "b"], retry: [] });
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
+    broker.rejectPublishTo.add("retry");
+
+    await expect(
+      withConnection(broker, (open) =>
+        messages.safeMoveMessages({
+          messages: all,
+          fromQueue: "orders",
+          toQueue: "retry",
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/Nothing was moved/);
+
+    expect(broker.payloads("orders")).toEqual(["a", "b"]);
+  });
+
+  it("says how many copies exist when it fails part way", async () => {
+    const { broker, messages } = build({ orders: ["a", "b", "c"], retry: [] });
+    const all = await withConnection(broker, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
+
+    let published = 0;
+    const original = broker.publishMessage.bind(broker);
+    broker.publishMessage = async (input: {
+      routingKey: string;
+      payload: string;
+    }) => {
+      if (input.routingKey === "retry" && published++ >= 2) return false;
+      return original(input);
+    };
+
+    await expect(
+      withConnection(broker, (open) =>
+        messages.safeMoveMessages({
+          messages: all,
+          fromQueue: "orders",
+          toQueue: "retry",
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/2 of 3 were already copied; none have been removed/);
+
+    expect(broker.payloads("orders")).toEqual(["a", "b", "c"]);
   });
 });

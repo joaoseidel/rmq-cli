@@ -10,7 +10,6 @@ export const ALL_MESSAGES = Number.MAX_SAFE_INTEGER;
 
 export const SEARCH_DEPTHS = [100, 200, 500, 1000, 5000, 10_000] as const;
 
-/** Messages peeked per queue by a cross-queue search. */
 export const DEFAULT_SEARCH_LIMIT = 200;
 
 export interface MessageSearchHit {
@@ -45,18 +44,26 @@ export function stepSearchDepth(
   return SEARCH_DEPTHS[next] ?? current;
 }
 
+export function searchableText(message: Message): string[] {
+  return [
+    message.payload,
+    message.id,
+    message.routingKey,
+    message.exchange,
+    ...Object.values(message.headers),
+    ...Object.values(message.properties),
+  ];
+}
+
 export function messageMatcher(term: string): (message: Message) => boolean {
   const matches = globMatcher(`*${term}*`);
-  return (message) => matches(message.payload) || matches(message.id);
+  return (message) => searchableText(message).some(matches);
 }
 
 export interface RemovalOutcome {
   readonly operationId: string;
-  /** Targeted messages that were removed. */
   readonly removed: number;
-  /** Bystanders successfully put back on the queue. */
   readonly restored: number;
-  /** Bystanders that could not be put back — recoverable from the backup. */
   readonly lost: number;
   readonly unprocessedMessages: readonly Message[];
 }
@@ -230,57 +237,102 @@ export class MessageOperations {
     return this.removeFromQueue({ ...rest, targets: [id] });
   }
 
-  async safeRequeueMessage(input: {
+  private async publishAll(
+    messages: readonly Message[],
+    connection: BrokerConnection,
+    route: (message: Message) => {
+      exchange?: string | undefined;
+      routingKey: string;
+    },
+    describe: (message: Message) => string,
+  ): Promise<void> {
+    let copied = 0;
+
+    for (const message of messages) {
+      const { exchange, routingKey } = route(message);
+
+      const published = await this.broker.publishMessage({
+        ...(exchange === undefined ? {} : { exchange }),
+        routingKey,
+        payload: message.payload,
+        connection,
+      });
+
+      if (!published) {
+        throw new Error(
+          `Failed to publish to ${describe(message)}. ` +
+            (copied === 0
+              ? "Nothing was moved."
+              : `${copied} of ${messages.length} were already copied; none have been removed.`),
+        );
+      }
+
+      copied += 1;
+    }
+  }
+
+  async safeMoveMessages(input: {
+    messages: readonly Message[];
+    fromQueue: string;
+    toQueue: string;
+    connection: BrokerConnection;
+  }): Promise<RemovalOutcome> {
+    const { messages, fromQueue, toQueue, connection } = input;
+
+    await this.publishAll(
+      messages,
+      connection,
+      () => ({ routingKey: toQueue }),
+      () => `'${toQueue}'`,
+    );
+
+    return this.removeFromQueue({
+      queueName: fromQueue,
+      targets: messages.map((message) => message.id),
+      connection,
+    });
+  }
+
+  async safeReprocessMessages(input: {
+    messages: readonly Message[];
+    fromQueue: string;
+    connection: BrokerConnection;
+  }): Promise<RemovalOutcome> {
+    const { messages, fromQueue, connection } = input;
+
+    await this.publishAll(
+      messages,
+      connection,
+      (message) => ({
+        exchange: message.exchange,
+        routingKey: message.routingKey,
+      }),
+      (message) => `'${message.exchange}'`,
+    );
+
+    return this.removeFromQueue({
+      queueName: fromQueue,
+      targets: messages.map((message) => message.id),
+      connection,
+    });
+  }
+
+  safeRequeueMessage(input: {
     message: Message;
     fromQueue: string;
     toQueue: string;
     connection: BrokerConnection;
   }): Promise<RemovalOutcome> {
-    const { message, fromQueue, toQueue, connection } = input;
-
-    const published = await this.broker.publishMessage({
-      routingKey: toQueue,
-      payload: message.payload,
-      connection,
-    });
-
-    if (!published) {
-      throw new Error(
-        `Failed to publish to '${toQueue}'. The message was left in '${fromQueue}'.`,
-      );
-    }
-
-    return this.removeFromQueue({
-      queueName: fromQueue,
-      targets: [message.id],
-      connection,
-    });
+    const { message, ...rest } = input;
+    return this.safeMoveMessages({ ...rest, messages: [message] });
   }
 
-  async safeReprocessMessage(input: {
+  safeReprocessMessage(input: {
     message: Message;
     fromQueue: string;
     connection: BrokerConnection;
   }): Promise<RemovalOutcome> {
-    const { message, fromQueue, connection } = input;
-
-    const published = await this.broker.publishMessage({
-      exchange: message.exchange,
-      routingKey: message.routingKey,
-      payload: message.payload,
-      connection,
-    });
-
-    if (!published) {
-      throw new Error(
-        `Failed to republish to '${message.exchange}'. The message was left in '${fromQueue}'.`,
-      );
-    }
-
-    return this.removeFromQueue({
-      queueName: fromQueue,
-      targets: [message.id],
-      connection,
-    });
+    const { message, ...rest } = input;
+    return this.safeReprocessMessages({ ...rest, messages: [message] });
   }
 }

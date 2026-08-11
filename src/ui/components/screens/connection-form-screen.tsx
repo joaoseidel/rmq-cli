@@ -68,7 +68,7 @@ const FIELDS: FormField[] = [
     label: "AMQP port",
     initialValue: "5672",
     validate: port("AMQP port"),
-    // Only meaningful for AMQP connections; HTTP ones never open a 5672 socket.
+
     visible: (values) => values["type"] === "amqp",
   },
   {
@@ -95,8 +95,7 @@ function buildConnection(values: Record<string, string>): ConnectionInfo {
     password: values["password"] ?? "",
     vHost: vHost(values["vhost"] ?? "/"),
     useSsl: values["ssl"] === "yes",
-    // A newly added connection becomes the default; it is almost always the one
-    // the user is about to work with.
+
     isDefault: true,
     httpPort: Number(values["httpPort"] ?? 15672),
   };
@@ -110,13 +109,6 @@ function buildConnection(values: Record<string, string>): ConnectionInfo {
       });
 }
 
-/**
- * Add-a-connection form.
- *
- * The connection is verified against the broker before it is saved, so a typo in
- * the host or password fails here rather than surfacing as an empty queue list
- * later on.
- */
 export function ConnectionFormScreen({
   connections,
   onSaved,

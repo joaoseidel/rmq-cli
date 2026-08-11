@@ -16,16 +16,13 @@ export interface FormField {
   readonly label: string;
   readonly initialValue?: string;
   readonly placeholder?: string;
-  /** Renders input as asterisks. */
   readonly secret?: boolean;
-  /** Turns the field into a left/right chooser instead of a text box. */
   readonly choices?: readonly FieldChoice[];
-  /** Return a message to block submission, or null when the value is fine. */
+  readonly suggestions?: readonly string[];
   readonly validate?: (
     value: string,
     values: Record<string, string>,
   ) => string | null;
-  /** Hides the field unless the predicate passes — for dependent options. */
   readonly visible?: (values: Record<string, string>) => boolean;
 }
 
@@ -37,12 +34,6 @@ export interface FormProps {
   readonly submitLabel?: string;
 }
 
-/**
- * Field validators.
- *
- * Shared rather than re-inlined per screen: "X is required." was written out ten
- * times across the form screens, which is ten chances for the wording to drift.
- */
 export function required(label: string) {
   return (value: string) =>
     value.trim() === "" ? `${label} is required.` : null;
@@ -54,6 +45,26 @@ export function positiveInteger(label: string) {
     return Number.isInteger(parsed) && parsed > 0
       ? null
       : `${label} must be a positive whole number.`;
+  };
+}
+
+export function mustBeKnown(
+  label: string,
+  known: readonly string[],
+  noun = "queue",
+) {
+  return (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed === "") return `${label} is required.`;
+    if (known.length === 0 || known.includes(trimmed)) return null;
+
+    const near = known
+      .filter((name) => name.toLowerCase().includes(trimmed.toLowerCase()))
+      .slice(0, 3);
+
+    return near.length > 0
+      ? `No ${noun} named '${trimmed}'. Did you mean ${near.join(", ")}?`
+      : `No ${noun} named '${trimmed}'.`;
   };
 }
 
@@ -75,17 +86,6 @@ function initialValues(fields: readonly FormField[]): Record<string, string> {
   return values;
 }
 
-/**
- * Vertical form with tab/arrow navigation.
- *
- * Every action in the app that used to be a shell command with flags is entered
- * through one of these, so validation lives next to the field it guards and the
- * user finds out about a bad port or a missing host before anything touches the
- * broker.
- *
- * The form claims the keyboard while focused, so screen-level shortcuts do not
- * fire on characters typed into a field.
- */
 export function Form({
   fields,
   onSubmit,
@@ -110,6 +110,40 @@ export function Form({
   );
   const current = visible[Math.min(index, visible.length - 1)];
 
+  const suggestion = useMemo(() => {
+    const options = current?.suggestions;
+    if (options === undefined || current === undefined) return null;
+
+    const value = values[current.name] ?? "";
+    const needle = value.trim().toLowerCase();
+    if (needle === "")
+      return { matches: options, top: null, ghost: "", total: options.length };
+
+    const prefix = options.filter((name) =>
+      name.toLowerCase().startsWith(needle),
+    );
+    const rest = options.filter(
+      (name) =>
+        !name.toLowerCase().startsWith(needle) &&
+        name.toLowerCase().includes(needle),
+    );
+
+    const matches = [...prefix, ...rest];
+    const best = matches[0];
+    const top = best === undefined || best === value ? null : (best ?? null);
+
+    return {
+      matches,
+      top,
+
+      ghost:
+        top !== null && top.toLowerCase().startsWith(needle)
+          ? top.slice(value.length)
+          : "",
+      total: options.length,
+    };
+  }, [current, values]);
+
   const setValue = (name: string, value: string) => {
     setValues((previous) => ({ ...previous, [name]: value }));
     setError(null);
@@ -125,8 +159,6 @@ export function Form({
       }
     }
 
-    // Hidden fields are dropped so callers never see stale values from options
-    // that were switched off.
     const submitted: Record<string, string> = {};
     for (const field of visible)
       submitted[field.name] = values[field.name] ?? "";
@@ -150,7 +182,15 @@ export function Form({
         return;
       }
 
-      // Choice fields consume left/right; text fields never see them.
+      if (
+        key.rightArrow &&
+        current?.suggestions !== undefined &&
+        suggestion?.top != null
+      ) {
+        setValue(current.name, suggestion.top);
+        return;
+      }
+
       if (current?.choices !== undefined && (key.leftArrow || key.rightArrow)) {
         const options = current.choices;
         const position = options.findIndex(
@@ -182,13 +222,20 @@ export function Form({
             </Text>
 
             {field.choices === undefined ? (
-              <TextInput
-                value={value}
-                onChange={(next) => setValue(field.name, next)}
-                placeholder={field.placeholder ?? ""}
-                isActive={focused}
-                mask={field.secret === true}
-              />
+              <Text>
+                <TextInput
+                  value={value}
+                  onChange={(next) => setValue(field.name, next)}
+                  placeholder={field.placeholder ?? ""}
+                  isActive={focused}
+                  mask={field.secret === true}
+                />
+                {focused && suggestion !== null && suggestion.ghost !== "" ? (
+                  <Text color={theme.muted} dimColor>
+                    {suggestion.ghost}
+                  </Text>
+                ) : null}
+              </Text>
             ) : (
               <Text>
                 {field.choices.map((choice) => (
@@ -209,15 +256,27 @@ export function Form({
         );
       })}
 
-      <Box marginTop={1}>
-        {error === null ? (
-          <Text color={theme.muted}>
-            tab/↑↓ move {glyphs.bullet} ⏎ {submitLabel} {glyphs.bullet} esc
-            cancel
-          </Text>
-        ) : (
+      {}
+      <Box flexDirection="column" marginTop={1}>
+        {error !== null ? (
           <Text color={theme.danger}>{error}</Text>
+        ) : suggestion === null ? (
+          <Text> </Text>
+        ) : (
+          <Text color={theme.muted}>
+            {suggestion.matches.length} of {suggestion.total} match
+            {suggestion.matches.length === 0
+              ? ""
+              : `: ${suggestion.matches.slice(0, 4).join(", ")}${
+                  suggestion.matches.length > 4 ? ", …" : ""
+                }`}
+            {suggestion.top === null ? "" : `  ${glyphs.arrowRight} complete`}
+          </Text>
         )}
+
+        <Text color={theme.muted}>
+          tab/↑↓ move {glyphs.bullet} ⏎ {submitLabel} {glyphs.bullet} esc cancel
+        </Text>
       </Box>
     </Box>
   );

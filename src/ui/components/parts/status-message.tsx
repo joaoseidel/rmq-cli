@@ -15,18 +15,9 @@ const TONES: Record<StatusTone, { color: string; prefix: string }> = {
 export interface StatusMessageProps {
   readonly tone: StatusTone;
   readonly children: ReactNode;
-  /** Drops the leading glyph, for lines that continue a previous message. */
   readonly bare?: boolean;
 }
 
-/**
- * A single tone-coded line: the CLI's unit of feedback.
- *
- * Rendered as one inline `<Text>` rather than a `<Box>` of parts. A Box lays its
- * children out with flexbox and wraps each independently, which splits a message
- * across lines at arbitrary points — badly visible when the tail is a long file
- * path.
- */
 function StatusMessageComponent({
   tone,
   children,
@@ -48,12 +39,10 @@ function StatusMessageComponent({
 
 export const StatusMessage = memo(StatusMessageComponent);
 
-/** Emphasised inline name, matching the `'name'` convention used in messages. */
 export function Name({ children }: { readonly children: ReactNode }) {
   return <Text color={theme.info}>&apos;{children}&apos;</Text>;
 }
 
-/** De-emphasised inline detail, for flags and paths quoted inside prose. */
 export function Muted({ children }: { readonly children: ReactNode }) {
   return <Text color={theme.muted}>{children}</Text>;
 }

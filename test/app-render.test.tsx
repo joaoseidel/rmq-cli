@@ -16,17 +16,21 @@ import { VHostOperations } from "../src/core/usecase/vhost-operations.ts";
 import { App } from "../src/ui/components/app.tsx";
 import { FakeBroker, testConnection } from "./fake-broker.ts";
 
-/** A container wired to an in-memory broker and a throwaway config directory. */
 function build(seed: Record<string, string[]>): Container {
   const broker = new FakeBroker(seed);
   const dir = mkdtempSync(join(tmpdir(), "rmq-app-"));
 
   const settings = new JsonSettingsStore({ configDir: dir });
-  const configStore = new JsonConfigurationStore(settings, new FileKeySecretCipher(dir));
+  const configStore = new JsonConfigurationStore(
+    settings,
+    new FileKeySecretCipher(dir),
+  );
   configStore.saveConnection(testConnection);
 
   const coordinator = new BackedUpOperationCoordinator(
-    new JsonMessageBackupRepository(new JsonSettingsStore({ configDir: dir, fileName: "backups" })),
+    new JsonMessageBackupRepository(
+      new JsonSettingsStore({ configDir: dir, fileName: "backups" }),
+    ),
   );
 
   return {
@@ -42,7 +46,9 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
 describe("App", () => {
   it("mounts and renders the queue browser", async () => {
-    const { lastFrame, unmount } = render(<App container={build({ orders: ["a", "b"] })} />);
+    const { lastFrame, unmount } = render(
+      <App container={build({ orders: ["a", "b"] })} />,
+    );
     await settle();
 
     const frame = lastFrame() ?? "";
@@ -52,11 +58,13 @@ describe("App", () => {
   });
 
   it("shows the footer hints derived from the keymap", async () => {
-    const { lastFrame, unmount } = render(<App container={build({ orders: [] })} />);
+    const { lastFrame, unmount } = render(
+      <App container={build({ orders: [] })} />,
+    );
     await settle();
 
     const frame = lastFrame() ?? "";
-    // Sourced from SCREEN_KEYS.queues via hintsFor, not a second hand-written list.
+
     expect(frame).toContain("filter");
     expect(frame).toContain("purge");
     expect(frame).toContain("actions");
@@ -64,7 +72,9 @@ describe("App", () => {
   });
 
   it("lists the queues the broker reports", async () => {
-    const { lastFrame, unmount } = render(<App container={build({ orders: ["a"], retry: [] })} />);
+    const { lastFrame, unmount } = render(
+      <App container={build({ orders: ["a"], retry: [] })} />,
+    );
     await settle();
 
     const frame = lastFrame() ?? "";
@@ -82,10 +92,11 @@ describe("searching across filtered queues", () => {
   };
 
   it("searches the queues the filter left, and no others", async () => {
-    const { lastFrame, stdin, unmount } = render(<App container={build(seed)} />);
+    const { lastFrame, stdin, unmount } = render(
+      <App container={build(seed)} />,
+    );
     await settle();
 
-    // Narrow the queue list to the order queues...
     stdin.write("/");
     await settle();
     stdin.write("order");
@@ -93,7 +104,6 @@ describe("searching across filtered queues", () => {
     stdin.write("\r");
     await settle();
 
-    // ...then search across exactly those.
     stdin.write("s");
     await settle();
     stdin.write("AB-991");
@@ -105,13 +115,15 @@ describe("searching across filtered queues", () => {
     expect(frame).toContain("Search 2 queues");
     expect(frame).toContain("order-processing");
     expect(frame).toContain("order-dlq");
-    // Outside the filter, so it must not appear among the hits.
+
     expect(frame).not.toContain("audit-log");
     unmount();
   });
 
   it("says how much of the scope it covered", async () => {
-    const { lastFrame, stdin, unmount } = render(<App container={build(seed)} />);
+    const { lastFrame, stdin, unmount } = render(
+      <App container={build(seed)} />,
+    );
     await settle();
 
     stdin.write("s");
@@ -131,10 +143,12 @@ describe("searching across filtered queues", () => {
 
 describe("adjusting how deep a search goes", () => {
   it("finds on + what the default depth stopped short of", async () => {
-    // The needle sits past the 200-message default, so the first run must miss
-    // it and say why, and + must then reach it.
-    const payloads = Array.from({ length: 250 }, (_, i) => (i === 240 ? "needle" : "hay"));
-    const { lastFrame, stdin, unmount } = render(<App container={build({ orders: payloads })} />);
+    const payloads = Array.from({ length: 250 }, (_, i) =>
+      i === 240 ? "needle" : "hay",
+    );
+    const { lastFrame, stdin, unmount } = render(
+      <App container={build({ orders: payloads })} />,
+    );
     await settle();
 
     stdin.write("s");

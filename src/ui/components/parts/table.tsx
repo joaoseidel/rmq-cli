@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import type { ReactNode } from "react";
-import { borders, theme } from "../../theme.ts";
+import { borders, glyphs, theme } from "../../theme.ts";
 import {
   displayWidth,
   padToWidth,
@@ -11,37 +11,39 @@ import {
 export interface Column<T> {
   readonly key: string;
   readonly header: string;
-  /** Plain text for the cell. Also what column widths are measured from. */
   readonly value: (row: T) => string;
-  /** Optional rich cell. Must render exactly the same width as `value`. */
   readonly render?: (row: T, width: number) => ReactNode;
   readonly align?: "left" | "right";
   readonly minWidth?: number;
-  /** Share of the leftover width this column absorbs. 0 keeps it natural. */
   readonly flex?: number;
 }
 
 export interface TableProps<T> {
   readonly columns: readonly Column<T>[];
   readonly rows: readonly T[];
-  /** Total cells available, normally the terminal width. */
   readonly maxWidth: number;
-  /** Marks one row as selected — used by the interactive screens. */
   readonly selectedIndex?: number;
   readonly rowKey?: (row: T, index: number) => string;
+  readonly isMarked?: (row: T) => boolean;
 }
 
 const CELL_PADDING = 1;
 
-/**
- * Computes final column widths for the available space.
- *
- * Columns start at their natural width (the widest of header and cells). If the
- * table overflows, only flexible columns shrink, in proportion to their `flex`
- * weight and never below `minWidth` — so a payload column gives up room while
- * the counters beside it stay readable. Leftover space is handed to flexible
- * columns so the table fills the terminal rather than hugging the left edge.
- */
+function markColumn<T>(isMarked: (row: T) => boolean): Column<T> {
+  return {
+    key: "__mark",
+    header: " ",
+    value: (row) => (isMarked(row) ? glyphs.check : " "),
+    flex: 0,
+    render: (row, width) =>
+      isMarked(row) ? (
+        <Text color={theme.success}>{fitCell(glyphs.check, width)}</Text>
+      ) : (
+        <Text>{fitCell(" ", width)}</Text>
+      ),
+  };
+}
+
 export function computeColumnWidths<T>(
   columns: readonly Column<T>[],
   rows: readonly T[],
@@ -50,13 +52,6 @@ export function computeColumnWidths<T>(
   return widthsForCells(columns, renderCells(columns, rows), maxWidth);
 }
 
-/**
- * The plain text of every cell, flattened to one line.
- *
- * Built once and used for both measuring and drawing: computing it separately in
- * each pass meant every `value` callback — including the payload truncation,
- * which compiles a regex — ran twice per row per render.
- */
 function renderCells<T>(
   columns: readonly Column<T>[],
   rows: readonly T[],
@@ -72,8 +67,6 @@ function widthsForCells<T>(
   maxWidth: number,
 ): number[] {
   const natural = columns.map((column, index) => {
-    // Reduced rather than spread into Math.max: a long list would overflow the
-    // argument limit.
     let widest = Math.max(displayWidth(column.header), 1);
     for (const row of cells) {
       const width = displayWidth(row[index] ?? "");
@@ -82,7 +75,6 @@ function widthsForCells<T>(
     return widest;
   });
 
-  // Borders: one vertical per column plus a trailing one, each cell padded.
   const chrome = columns.length * (1 + CELL_PADDING * 2) + 1;
   const available = Math.max(columns.length, maxWidth - chrome);
 
@@ -108,8 +100,6 @@ function widthsForCells<T>(
       widths[index] = reduced;
     }
 
-    // Still over budget: shave the widest column, flexible or not, until the row
-    // fits. A table that overflows wraps, and a wrapped table is unreadable.
     let guard = 0;
     while (total() > available && guard < 10_000) {
       guard += 1;
@@ -156,27 +146,21 @@ function Rule({
   return <Text color={theme.border}>{left + segments.join(join) + right}</Text>;
 }
 
-/**
- * Fixed-width table.
- *
- * Each row is a single inline `<Text>` run rather than a row of `<Box>` cells.
- * That is load-bearing: Ink lays Boxes out with flexbox, which sizes and wraps
- * each cell independently and destroys the column alignment the padding was
- * computed for. Inline `<Text>` spans are concatenated verbatim, so what is
- * measured is what is printed.
- *
- * Deliberately not memoised: every caller builds its column array and its row
- * window fresh each render, so a shallow compare could never hit.
- */
 export function Table<T>({
   columns,
   rows,
   maxWidth,
   selectedIndex,
   rowKey,
+  isMarked,
 }: TableProps<T>) {
-  const cells = renderCells(columns, rows);
-  const widths = widthsForCells(columns, cells, maxWidth);
+  const columns_ =
+    isMarked === undefined
+      ? columns
+      : [markColumn(isMarked), ...(columns as Column<T>[])];
+
+  const cells = renderCells(columns_, rows);
+  const widths = widthsForCells(columns_, cells, maxWidth);
   const pad = " ".repeat(CELL_PADDING);
   const border = <Text color={theme.border}>{borders.vertical}</Text>;
 
@@ -186,7 +170,7 @@ export function Table<T>({
 
       <Text>
         {border}
-        {columns.map((column, index) => (
+        {columns_.map((column, index) => (
           <Text key={column.key}>
             <Text bold>
               {pad}
@@ -206,7 +190,7 @@ export function Table<T>({
         return (
           <Text key={rowKey?.(row, rowIndex) ?? String(rowIndex)}>
             {border}
-            {columns.map((column, index) => {
+            {columns_.map((column, index) => {
               const width = widths[index] ?? 0;
               const plain = padToWidth(
                 cells[rowIndex]?.[index] ?? "",
@@ -223,8 +207,7 @@ export function Table<T>({
                     color={selected ? theme.selectionForeground : undefined}
                   >
                     {pad}
-                    {/* A selected row is painted in one colour, so the rich cell
-                        is skipped: highlight colours would be invisible on it. */}
+                    {}
                     {selected ? plain : (column.render?.(row, width) ?? plain)}
                     {pad}
                   </Text>
@@ -241,12 +224,6 @@ export function Table<T>({
   );
 }
 
-/**
- * Fits a value to a column, for use inside a `render` callback.
- *
- * Custom cells must occupy exactly the width the layout assigned them, or every
- * border to their right shifts.
- */
 export function fitCell(
   value: string,
   width: number,

@@ -9,7 +9,6 @@ export interface PaletteAction {
   readonly id: string;
   readonly label: string;
   readonly hint: string;
-  /** Shown greyed with a reason when the action is unavailable here. */
   readonly unavailable?: string;
 }
 
@@ -21,14 +20,6 @@ export interface CommandPaletteProps {
   readonly height: number;
 }
 
-/**
- * Searchable list of everything available from the current screen.
- *
- * With no command line to fall back on, this is how a user finds a capability
- * they have not memorised a key for. Unavailable actions are listed with the
- * reason rather than hidden, so the absence of an option is explainable instead
- * of looking like a missing feature.
- */
 export function CommandPalette({
   actions,
   onRun,
@@ -42,13 +33,19 @@ export function CommandPalette({
   const items = useMemo<SelectItem<string>[]>(() => {
     const needle = query.trim().toLowerCase();
 
+    const rank = (action: PaletteAction): number => {
+      const label = action.label.toLowerCase();
+      if (label.startsWith(needle)) return 0;
+      if (label.includes(needle)) return 1;
+      if (action.hint.toLowerCase().includes(needle)) return 2;
+      return 3;
+    };
+
     return actions
-      .filter(
-        (action) =>
-          needle === "" ||
-          `${action.label} ${action.hint}`.toLowerCase().includes(needle),
-      )
-      .map((action) => ({
+      .map((action, index) => ({ action, index, rank: rank(action) }))
+      .filter((entry) => needle === "" || entry.rank < 3)
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map(({ action }) => ({
         value: action.id,
         label: action.label,
         detail: action.unavailable ?? action.hint,

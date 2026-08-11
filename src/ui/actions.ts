@@ -1,7 +1,6 @@
 import type { PaletteAction } from "./components/parts/command-palette.tsx";
 import type { PublishedSelection, Screen } from "./screens.ts";
 
-/** Every action the palette can offer, keyed by id. */
 export const ACTION_IDS = [
   "queues",
   "refresh",
@@ -26,23 +25,32 @@ export const ACTION_IDS = [
 
 export type ActionId = (typeof ACTION_IDS)[number];
 
-/**
- * What an action must have before it can run.
- *
- * `row` is the highlighted entry of whatever list is on screen; `queue` and
- * `message` are the resolved subjects, which a screen may carry in its own
- * parameters even after the list that published them has unmounted.
- */
 type Requirement = "row" | "queue" | "message";
+
+const EVERYWHERE: readonly Screen["name"][] = [
+  "queues",
+  "queue",
+  "message",
+  "search",
+  "consume",
+  "publish",
+  "transfer",
+  "export",
+  "import",
+  "move-message",
+  "connections",
+  "connection-form",
+  "vhosts",
+  "help",
+];
+
+const EVERYWHERE_BUT_QUEUES = EVERYWHERE.filter((name) => name !== "queues");
 
 interface ActionSpec {
   readonly label: string;
   readonly hint: string;
-  /** Screens the action can be invoked from. */
   readonly from: readonly Screen["name"][];
-  /** What must be selected for the action to be runnable. */
   readonly needs?: Requirement;
-  /** Requires an AMQP connection. */
   readonly needsAmqp?: boolean;
 }
 
@@ -50,7 +58,7 @@ const SPECS: Record<ActionId, ActionSpec> = {
   queues: {
     label: "Go to queues",
     hint: "back to the queue list",
-    from: ["queue", "message", "search", "connections", "vhosts", "help"],
+    from: EVERYWHERE_BUT_QUEUES,
   },
   refresh: {
     label: "Refresh",
@@ -129,7 +137,7 @@ const SPECS: Record<ActionId, ActionSpec> = {
   connections: {
     label: "Connections",
     hint: "switch, add, or remove brokers",
-    from: ["queues", "queue", "message", "search", "vhosts", "help"],
+    from: EVERYWHERE.filter((name) => name !== "connections"),
   },
   "add-connection": {
     label: "Add connection",
@@ -144,33 +152,22 @@ const SPECS: Record<ActionId, ActionSpec> = {
   help: {
     label: "Help",
     hint: "key reference",
-    from: ["queues", "queue", "message", "search", "connections", "vhosts"],
+    from: EVERYWHERE.filter((name) => name !== "help"),
   },
   quit: {
     label: "Quit",
     hint: "leave rmq",
-    from: [
-      "queues",
-      "queue",
-      "message",
-      "search",
-      "connections",
-      "vhosts",
-      "help",
-    ],
+    from: EVERYWHERE,
   },
 };
 
 export interface ActionContext {
   readonly screen: Screen["name"];
-  /** The subjects an action would act on, resolved for the current screen. */
   readonly selection: PublishedSelection;
-  /** The highlighted entry of the list on screen, if any. */
   readonly row: unknown;
   readonly isAmqp: boolean;
 }
 
-/** The reason an action cannot run right now, or undefined when it can. */
 function blockedBecause(
   spec: ActionSpec,
   context: ActionContext,
@@ -185,14 +182,16 @@ function blockedBecause(
   return undefined;
 }
 
-/**
- * Builds the palette listing for the current context.
- *
- * Actions that do not apply here are omitted; actions that apply but cannot run
- * right now are listed with the reason, so a greyed-out "Consume" tells the user
- * their connection is HTTP rather than leaving them to wonder where the feature
- * went.
- */
+export function rowActions(context: ActionContext): PaletteAction[] {
+  const subject: Requirement =
+    context.selection.message === null ? "queue" : "message";
+
+  return paletteActions(context).filter((action) => {
+    const needs = SPECS[action.id as ActionId].needs;
+    return needs === subject || needs === "row";
+  });
+}
+
 export function paletteActions(context: ActionContext): PaletteAction[] {
   const actions: PaletteAction[] = [];
 

@@ -23,14 +23,14 @@ function readVersion(): string {
 
 const VERSION = readVersion();
 
-const USAGE = `rmq ${VERSION} — a full-screen browser for RabbitMQ
+const USAGE = `rmq ${VERSION}: a full-screen browser for RabbitMQ
 
 Usage:
   rmq              open the browser
   rmq --help       show this message
   rmq --version    show the version
 
-Everything else — connections, queues, messages, publishing, exports — is done
+Everything else (connections, queues, messages, publishing, exports) is done
 inside the app. Press ':' for the action list or '?' for help once it opens.
 
 Environment:
@@ -51,8 +51,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  // The app is driven entirely by the keyboard and repaints in place, so without
-  // a terminal on both ends there is nothing it can usefully do.
   if (process.stdout.isTTY !== true || process.stdin.isTTY !== true) {
     process.stderr.write(
       "rmq is a full-screen terminal application and needs an interactive terminal.\n",
@@ -65,8 +63,6 @@ async function main(): Promise<void> {
   const restore = enterFullscreen();
 
   try {
-    // Ctrl+C is handled inside the app so screens holding a consumer or an
-    // in-flight operation can shut down cleanly instead of being killed.
     const instance = render(<App container={container} />, {
       exitOnCtrlC: false,
     });

@@ -1,13 +1,6 @@
 import type { Message } from "../core/domain/message.ts";
 import type { Queue } from "../core/domain/queue.ts";
 
-/**
- * Every view the app can show, each carrying what it needs to render.
- *
- * Modelling parameters on the screen itself — rather than in shared state
- * alongside a screen name — means going back restores the previous view exactly,
- * with no ordering assumptions between the name and its data.
- */
 export type Screen =
   | { readonly name: "queues" }
   | { readonly name: "queue"; readonly queue: Queue }
@@ -19,19 +12,12 @@ export type Screen =
   | {
       readonly name: "move-message";
       readonly queue: Queue;
-      readonly message: Message;
-      /** "reprocess" republishes to the original exchange instead of a queue. */
+      readonly messages: readonly Message[];
       readonly mode: "move" | "reprocess";
     }
   | {
       readonly name: "search";
-      /**
-       * The queues to search, captured from the queue browser at the moment the
-       * search was opened. Held here rather than re-derived so the scope cannot
-       * shift under a running scan if the broker's queue list changes.
-       */
       readonly queues: readonly Queue[];
-      /** The queue filter that produced the scope, for the header. */
       readonly scope: string;
     }
   | { readonly name: "consume"; readonly queue: Queue }
@@ -46,21 +32,11 @@ export type Screen =
 
 export type ScreenName = Screen["name"];
 
-/** The row a list screen has published as highlighted. */
 export interface PublishedSelection {
   readonly queue: Queue | null;
   readonly message: Message | null;
 }
 
-/**
- * What an action should act on, given where we are.
- *
- * A screen that carries a queue or message in its own parameters wins over the
- * published list selection: by the time an action runs, the list screen that
- * published it may already have unmounted. Both the palette (to decide what to
- * offer) and the action runner (to decide what to do) resolve it through here,
- * so the palette can never offer an action the runner then refuses.
- */
 export function effectiveSelection(
   screen: Screen,
   published: PublishedSelection,
@@ -80,8 +56,13 @@ export function screenTitle(screen: Screen): string {
       return screen.queue.name;
     case "message":
       return "Message";
-    case "move-message":
-      return screen.mode === "move" ? "Move message" : "Reprocess message";
+    case "move-message": {
+      const what =
+        screen.messages.length === 1
+          ? "message"
+          : `${screen.messages.length} messages`;
+      return screen.mode === "move" ? `Move ${what}` : `Reprocess ${what}`;
+    }
     case "search":
       return `Search ${screen.queues.length === 1 ? "1 queue" : `${screen.queues.length} queues`}`;
     case "consume":

@@ -1,8 +1,9 @@
 import {
   connect as amqpConnect,
-  type Channel,
   type ChannelModel,
+  type ConfirmChannel,
 } from "amqplib";
+import { randomUUID } from "node:crypto";
 import {
   amqpUrl,
   isAmqp,
@@ -25,18 +26,50 @@ import { BaseBrokerClient } from "./base-client.ts";
 
 const logger = createLogger("amqp-client");
 
-/** RabbitMQ rejects a prefetch above this; clamp rather than fail the command. */
 const MAX_PREFETCH = 65_535;
 
-/** How long to wait for a TCP connection before giving up. */
 const CONNECT_TIMEOUT_MS = 10_000;
 
+const PUBLISH_TOKEN_HEADER = "x-rmq-publish-token";
+
 class AmqpBrokerConnection implements BrokerConnection {
+  private readonly returned = new Set<string>();
+
   constructor(
     readonly info: ConnectionInfo,
-    readonly channel: Channel,
+    readonly channel: ConfirmChannel,
     private readonly model: ChannelModel,
-  ) {}
+  ) {
+    channel.on("return", (message) => {
+      const token = message.properties.headers?.[PUBLISH_TOKEN_HEADER];
+      if (typeof token === "string") this.returned.add(token);
+    });
+  }
+
+  async publishConfirmed(
+    exchange: string,
+    routingKey: string,
+    payload: Buffer,
+  ): Promise<boolean> {
+    const token = randomUUID();
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      this.channel.publish(
+        exchange,
+        routingKey,
+        payload,
+        {
+          persistent: true,
+          mandatory: true,
+          headers: { [PUBLISH_TOKEN_HEADER]: token },
+        },
+        (error) => resolve(error === null || error === undefined),
+      );
+    });
+
+    const wasReturned = this.returned.delete(token);
+    return confirmed && !wasReturned;
+  }
 
   async close(): Promise<void> {
     try {
@@ -73,11 +106,9 @@ export class AmqpBrokerClient extends BaseBrokerClient {
       timeout: CONNECT_TIMEOUT_MS,
     });
 
-    // amqplib emits 'error' on the model; without a listener Node would treat a
-    // broker-side close as an unhandled exception and kill the CLI.
     model.on("error", (error) => logger.warn("AMQP connection error", error));
 
-    const channel = await model.createChannel();
+    const channel = await model.createConfirmChannel();
     channel.on("error", (error) => logger.warn("AMQP channel error", error));
 
     return new AmqpBrokerConnection(info, channel, model);
@@ -95,15 +126,14 @@ export class AmqpBrokerClient extends BaseBrokerClient {
   }
 
   override async publishMessage(input: PublishInput): Promise<boolean> {
-    const channel = input.connection.channel;
-    if (channel === null) return false;
+    const connection = input.connection;
+    if (!(connection instanceof AmqpBrokerConnection)) return false;
 
     try {
-      return channel.publish(
+      return await connection.publishConfirmed(
         toWireExchange(input.exchange),
         input.routingKey,
         Buffer.from(input.payload, "utf8"),
-        { persistent: true },
       );
     } catch (error) {
       logger.error("Failed to publish message", error);
@@ -143,8 +173,6 @@ export class AmqpBrokerClient extends BaseBrokerClient {
     if (channel === null) return { ok: false, purged: null };
 
     try {
-      // The purge-ok frame carries the true count, unlike the management API's
-      // periodically-sampled statistics.
       const { messageCount } = await channel.purgeQueue(queueName);
       return { ok: true, purged: messageCount };
     } catch (error) {
@@ -166,7 +194,6 @@ export class AmqpBrokerClient extends BaseBrokerClient {
     const { consumerTag } = await channel.consume(
       input.queueName,
       (delivery) => {
-        // amqplib delivers null when the server cancels the consumer.
         if (delivery === null) {
           input.onCancel(consumerTag);
           return;

@@ -8,8 +8,14 @@ import {
   useActionResult,
   useAsyncAction,
 } from "../../hooks/use-async-action.ts";
+import { useQueueNames } from "../../hooks/use-queue-names.ts";
 import { theme } from "../../theme.ts";
-import { Form, required, type FormField } from "../common/form.tsx";
+import {
+  Form,
+  mustBeKnown,
+  required,
+  type FormField,
+} from "../common/form.tsx";
 import { Spinner } from "../parts/spinner.tsx";
 import { StatusMessage } from "../parts/status-message.tsx";
 
@@ -17,14 +23,16 @@ export interface PublishScreenProps {
   readonly broker: BrokerClient;
   readonly messages: MessageOperations;
   readonly connection: ConnectionInfo;
-  /** Pre-fills the destination when opened from a queue. */
   readonly queueName?: string;
   readonly onDone: (summary: string) => void;
   readonly onCancel: () => void;
   readonly isActive: boolean;
 }
 
-function buildFields(queueName: string | undefined): FormField[] {
+function buildFields(
+  queueName: string | undefined,
+  queueNames: readonly string[],
+): FormField[] {
   return [
     {
       name: "target",
@@ -38,8 +46,9 @@ function buildFields(queueName: string | undefined): FormField[] {
       name: "queue",
       label: "Queue",
       initialValue: queueName ?? "",
+      suggestions: queueNames,
       visible: (values) => values["target"] === "queue",
-      validate: required("Queue name"),
+      validate: mustBeKnown("Queue name", queueNames),
     },
     {
       name: "exchange",
@@ -84,7 +93,6 @@ function buildFields(queueName: string | undefined): FormField[] {
   ];
 }
 
-/** Publish a message to a queue or an exchange. */
 export function PublishScreen({
   broker,
   messages,
@@ -94,6 +102,8 @@ export function PublishScreen({
   onCancel,
   isActive,
 }: PublishScreenProps) {
+  const queueNames = useQueueNames(broker, connection);
+
   const publish = useAsyncAction(async (values: Record<string, string>) => {
     const payload =
       values["source"] === "file"
@@ -148,7 +158,7 @@ export function PublishScreen({
       ) : null}
 
       <Form
-        fields={buildFields(queueName)}
+        fields={buildFields(queueName, queueNames)}
         isActive={isActive}
         submitLabel="publish"
         onCancel={onCancel}

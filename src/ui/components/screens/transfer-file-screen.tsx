@@ -6,7 +6,10 @@ import type { ConnectionInfo } from "../../../core/domain/connection.ts";
 import { MessageSchema, type Message } from "../../../core/domain/message.ts";
 import type { Queue } from "../../../core/domain/queue.ts";
 import type { BrokerClient } from "../../../core/ports/broker.ts";
-import type { MessageOperations } from "../../../core/usecase/message-operations.ts";
+import {
+  ALL_MESSAGES,
+  type MessageOperations,
+} from "../../../core/usecase/message-operations.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import {
   useActionResult,
@@ -42,10 +45,21 @@ const EXPORT_FIELDS: FormField[] = [
     validate: required("A file path"),
   },
   {
+    name: "scope",
+    label: "How many",
+
+    choices: [
+      { value: "all", label: "everything" },
+      { value: "limit", label: "a number" },
+    ],
+  },
+  {
     name: "limit",
     label: "Limit",
     initialValue: "100",
-    validate: positiveInteger("Limit"),
+    visible: (values) => values["scope"] === "limit",
+    validate: (value, values) =>
+      values["scope"] === "limit" ? positiveInteger("Limit")(value) : null,
   },
   {
     name: "ack",
@@ -66,7 +80,6 @@ const IMPORT_FIELDS: FormField[] = [
   },
 ];
 
-/** Validates an export file before anything is published. */
 async function readExport(path: string): Promise<Message[]> {
   let raw: string;
   try {
@@ -94,13 +107,6 @@ async function readExport(path: string): Promise<Message[]> {
   return result.data as Message[];
 }
 
-/**
- * Moves messages between a queue and a JSON file on disk.
- *
- * Export defaults to leaving the queue untouched — the messages are read without
- * acknowledgement — so taking a copy for debugging is safe by default and
- * draining the queue is an explicit choice.
- */
 export function TransferFileScreen({
   mode,
   broker,
@@ -111,7 +117,6 @@ export function TransferFileScreen({
   onCancel,
   isActive,
 }: TransferFileScreenProps) {
-  // Only the acknowledging variant is destructive, so only it prompts.
   const [pendingValues, setPendingValues] = useState<Record<
     string,
     string
@@ -121,13 +126,13 @@ export function TransferFileScreen({
     const path = values["file"] ?? "";
 
     if (mode === "export") {
+      const limit =
+        values["scope"] === "limit"
+          ? Number(values["limit"] ?? 100)
+          : ALL_MESSAGES;
+
       const collected = await broker.withConnection(connection, (open) =>
-        messages.getMessages(
-          queue.name,
-          Number(values["limit"] ?? 100),
-          values["ack"] === "ack",
-          open,
-        ),
+        messages.getMessages(queue.name, limit, values["ack"] === "ack", open),
       );
 
       if (collected.length === 0)
@@ -168,7 +173,11 @@ export function TransferFileScreen({
           exist in {pendingValues["file"]}.
         </StatusMessage>
         <Confirm
-          message={`Export up to ${pendingValues["limit"]} messages and remove them from '${queue.name}'?`}
+          message={`Export ${
+            pendingValues["scope"] === "limit"
+              ? `up to ${pendingValues["limit"]} messages`
+              : "every message"
+          } and remove them from '${queue.name}'?`}
           isActive={isActive}
           onAnswer={(confirmed) => {
             const values = pendingValues;

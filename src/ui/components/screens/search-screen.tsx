@@ -20,7 +20,6 @@ import { FilterBar } from "../parts/filter-bar.tsx";
 import { StatusMessage } from "../parts/status-message.tsx";
 import { SearchHitTable } from "../parts/tables.tsx";
 
-/** Scope line, filter line, table header, its two rules, and the status line. */
 const SEARCH_CHROME_LINES = 6;
 
 const EMPTY_OUTCOME: MessageSearchOutcome = {
@@ -34,15 +33,9 @@ const EMPTY_OUTCOME: MessageSearchOutcome = {
 
 interface SearchRun {
   readonly term: string;
-  /**
-   * The depth this run used. Held on the run rather than read from the current
-   * setting, so the cap warning always quotes the number that actually produced
-   * the results on screen, not one the user has since changed.
-   */
   readonly limit: number;
   readonly outcome: MessageSearchOutcome;
   readonly done: boolean;
-  /** Set when the scan itself failed, as opposed to one queue inside it. */
   readonly error?: string;
 }
 
@@ -50,9 +43,7 @@ export interface SearchScreenProps {
   readonly broker: BrokerClient;
   readonly messages: MessageOperations;
   readonly connection: ConnectionInfo;
-  /** The queues to search, as filtered on the queue browser. */
   readonly queues: readonly Queue[];
-  /** The queue filter that produced the scope, shown in the header. */
   readonly scope: string;
   readonly onOpen: (queue: Queue, message: Message) => void;
   readonly onAction: (id: ActionId) => void;
@@ -61,19 +52,6 @@ export interface SearchScreenProps {
   readonly isActive: boolean;
 }
 
-/**
- * Message search across several queues at once.
- *
- * The queue browser's `/` narrows the list to the queues worth looking in; this
- * screen answers the question that follows — which of them actually holds the
- * message. Without it the only way through is to open each queue, filter, go
- * back, and repeat, which is exactly the loop you cannot afford when a payment
- * has gone missing and there are eleven candidate dead-letter queues.
- *
- * Results stream in queue by queue rather than appearing at the end, because the
- * answer is usually in the first queue or two and there is no reason to make the
- * user wait for the rest of the scan to confirm it.
- */
 export function SearchScreen({
   broker,
   messages,
@@ -89,10 +67,9 @@ export function SearchScreen({
   const [term, setTerm] = useState("");
   const [typing, setTyping] = useState(true);
   const [query, setQuery] = useState("");
-  // Bumped by `r` to re-run the same term against a broker that has moved on.
+
   const [runToken, setRunToken] = useState(0);
-  // Messages peeked per queue. Changing it re-runs the search, which is the
-  // whole point: you raise it because the last run told you it stopped short.
+
   const [limit, setLimit] = useState<number>(DEFAULT_SEARCH_LIMIT);
   const [run, setRun] = useState<SearchRun | null>(null);
 
@@ -102,8 +79,6 @@ export function SearchScreen({
     [queues],
   );
 
-  // Read by the scan between queues so leaving the screen stops it at the next
-  // boundary instead of running the remaining queues into a dead component.
   const cancelledRef = useRef(false);
 
   useEffect(() => {
@@ -267,8 +242,7 @@ function SearchBody({
             pattern={run.term}
             selectedIndex={selectedIndex - start}
           />
-          {/* The id of the highlighted hit, which the table has no room for:
-              the queue and the payload earn those columns instead. */}
+
           <Text color={theme.muted}>
             {selectedIndex + 1}/{hits.length} {glyphs.bullet}{" "}
             {hits[selectedIndex]?.message.id ?? ""}
@@ -281,12 +255,6 @@ function SearchBody({
   );
 }
 
-/**
- * The line under the results: how much of the scope was actually looked at.
- *
- * A search that found nothing is only useful alongside what it covered, so the
- * caps and the unreadable queues are stated rather than left implicit.
- */
 function SearchSummary({ run }: { readonly run: SearchRun }) {
   const { outcome, done } = run;
   const { truncated, failures } = outcome;
@@ -300,7 +268,7 @@ function SearchSummary({ run }: { readonly run: SearchRun }) {
     const deepest = SEARCH_DEPTHS[SEARCH_DEPTHS.length - 1] ?? run.limit;
     caveats.push(
       `${formatCount(truncated.length, "queue")} hit the ${run.limit}-message cap ` +
-        `(${truncated.slice(0, 3).join(", ")}${truncated.length > 3 ? ", …" : ""}) — ` +
+        `(${truncated.slice(0, 3).join(", ")}${truncated.length > 3 ? ", …" : ""}). ` +
         (run.limit < deepest
           ? "press + to search deeper"
           : "there may be older messages this did not reach"),

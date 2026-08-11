@@ -3,7 +3,7 @@ export function toGlobRegex(pattern: string): RegExp {
     .replaceAll(".", "\\.")
     .replaceAll("*", ".*")
     .replaceAll("?", ".");
-  return new RegExp(source);
+  return new RegExp(source, "i");
 }
 
 export function removeGlob(pattern: string): string {

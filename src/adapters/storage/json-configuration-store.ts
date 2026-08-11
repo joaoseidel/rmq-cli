@@ -14,11 +14,6 @@ const logger = createLogger("configuration-store");
 
 const COLLECTION = "connections";
 
-/**
- * Connections are held in memory with a plaintext password and written with an
- * encrypted one. Every read goes through {@link decrypted} and every write
- * through {@link encrypted}, so no path can leak a plaintext password to disk.
- */
 export class JsonConfigurationStore implements ConfigurationStore {
   constructor(
     private readonly settings: SettingsStore,
@@ -128,26 +123,28 @@ export class JsonConfigurationStore implements ConfigurationStore {
   }
 
   private encrypted(connection: ConnectionInfo): ConnectionInfo {
-    return { ...connection, password: this.cipher.encrypt(connection.password) };
+    return {
+      ...connection,
+      password: this.cipher.encrypt(connection.password),
+    };
   }
 
   private decrypted(stored: ConnectionInfo): ConnectionInfo {
     const password = this.cipher.decrypt(stored.password);
     if (password !== null) return { ...stored, password };
 
-    // A rotated or restored key file leaves unreadable ciphertext behind. The
-    // connection stays visible so it can be repaired from the form rather than
-    // silently vanishing from the list.
     logger.error(
       `Failed to decrypt the password for connection '${stored.name}'; re-enter it to restore access`,
     );
     return { ...stored, password: "" };
   }
 
-  /** Upgrades settings written before passwords were encrypted. */
   private encryptStoredPasswords(): void {
     try {
-      for (const stored of this.settings.list(COLLECTION, ConnectionInfoSchema)) {
+      for (const stored of this.settings.list(
+        COLLECTION,
+        ConnectionInfoSchema,
+      )) {
         if (this.cipher.isEncrypted(stored.password)) continue;
 
         this.settings.update(COLLECTION, this.encrypted(stored));

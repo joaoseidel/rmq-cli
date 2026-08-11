@@ -32,7 +32,7 @@ export class JsonSettingsStore implements SettingsStore {
     try {
       content = readFileSync(this.filePath, "utf8");
     } catch {
-      return; // First run: no file yet.
+      return;
     }
 
     if (content.trim() === "") return;

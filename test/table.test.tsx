@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { render } from "ink-testing-library";
 import stringWidth from "string-width";
-import { computeColumnWidths, type Column } from "../src/ui/components/parts/table.tsx";
+import {
+  computeColumnWidths,
+  type Column,
+} from "../src/ui/components/parts/table.tsx";
 import { QueueTable } from "../src/ui/components/parts/tables.tsx";
 import type { Queue } from "../src/core/domain/queue.ts";
 
@@ -11,7 +14,13 @@ interface Row {
 }
 
 const columns: Column<Row>[] = [
-  { key: "name", header: "Name", value: (row) => row.name, flex: 3, minWidth: 6 },
+  {
+    key: "name",
+    header: "Name",
+    value: (row) => row.name,
+    flex: 3,
+    minWidth: 6,
+  },
   { key: "count", header: "Count", value: (row) => row.count },
 ];
 
@@ -20,7 +29,6 @@ const rows: Row[] = [
   { name: "a-much-longer-queue-name", count: "1000" },
 ];
 
-/** Total rendered width: cells, plus a padded border per column and a closing one. */
 function totalWidth(widths: number[]): number {
   return widths.reduce((sum, width) => sum + width, 0) + widths.length * 3 + 1;
 }
@@ -28,7 +36,9 @@ function totalWidth(widths: number[]): number {
 describe("computeColumnWidths", () => {
   it("never exceeds the available width", () => {
     for (const max of [40, 60, 80, 120, 200]) {
-      expect(totalWidth(computeColumnWidths(columns, rows, max))).toBeLessThanOrEqual(max);
+      expect(
+        totalWidth(computeColumnWidths(columns, rows, max)),
+      ).toBeLessThanOrEqual(max);
     }
   });
 
@@ -39,7 +49,7 @@ describe("computeColumnWidths", () => {
 
   it("shrinks the flexible column rather than the fixed one", () => {
     const widths = computeColumnWidths(columns, rows, 40);
-    // "Count" is the header, so the fixed column never drops below it.
+
     expect(widths[1]).toBeGreaterThanOrEqual("Count".length);
   });
 
@@ -57,13 +67,25 @@ describe("computeColumnWidths", () => {
 
 describe("QueueTable", () => {
   const queues: Queue[] = [
-    { name: "order-processing", vhost: "/", messagesReady: 22, messagesUnacknowledged: 0 },
-    { name: "order-failed", vhost: "/", messagesReady: 3, messagesUnacknowledged: 1 },
+    {
+      name: "order-processing",
+      vhost: "/",
+      messagesReady: 22,
+      messagesUnacknowledged: 0,
+    },
+    {
+      name: "order-failed",
+      vhost: "/",
+      messagesReady: 3,
+      messagesUnacknowledged: 1,
+    },
   ];
 
   it("renders every row within the requested width", () => {
     const { lastFrame } = render(<QueueTable queues={queues} width={80} />);
-    const lines = (lastFrame() ?? "").split("\n").filter((line) => line.trim() !== "");
+    const lines = (lastFrame() ?? "")
+      .split("\n")
+      .filter((line) => line.trim() !== "");
 
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {

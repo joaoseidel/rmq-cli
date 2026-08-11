@@ -5,20 +5,9 @@ import { useKeyHandler } from "./use-key-handler.ts";
 
 export interface ScreenKeysOptions {
   readonly isActive: boolean;
-  /**
-   * Keys the screen handles itself, by character. Consulted before the shared
-   * table, so a screen can override a binding without editing the table.
-   */
   readonly local?: Readonly<Record<string, () => void>>;
 }
 
-/**
- * Dispatches a screen's keys from the shared {@link SCREEN_KEYS} table.
- *
- * Screens used to spell out an `if (input === "e") onAction("export")` ladder
- * each, which is how the footer and the help screen drifted away from what was
- * actually bound. Now the table is the only place a key is declared.
- */
 export function useScreenKeys(
   screen: ScreenName,
   onAction: (id: ActionId) => void,

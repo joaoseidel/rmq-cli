@@ -5,7 +5,6 @@ import { useState } from "react";
 import { TextInput } from "../src/ui/components/common/text-input.tsx";
 import { useKeyHandler } from "../src/ui/hooks/use-key-handler.ts";
 
-/** Lets Ink process the keystrokes it has been handed. */
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 30));
 }
@@ -17,9 +16,6 @@ function Controlled() {
 
 describe("TextInput", () => {
   it("accumulates characters instead of replacing them", async () => {
-    // Ink subscribes its keypress listener once, so a handler that closes over
-    // props sees the first render's value forever. That regression showed up as
-    // a filter field that only ever held the last character typed.
     const { stdin, lastFrame } = render(<Controlled />);
     await settle();
 
@@ -67,7 +63,14 @@ describe("TextInput", () => {
   it("shows the placeholder only while empty", async () => {
     function WithPlaceholder() {
       const [value, setValue] = useState("");
-      return <TextInput value={value} onChange={setValue} placeholder="type here" isActive />;
+      return (
+        <TextInput
+          value={value}
+          onChange={setValue}
+          placeholder="type here"
+          isActive
+        />
+      );
     }
 
     const { stdin, lastFrame } = render(<WithPlaceholder />);
@@ -85,7 +88,7 @@ describe("TextInput", () => {
 
     stdin.write("a");
     await settle();
-    // A stray Ctrl+A must not be inserted as text.
+
     stdin.write("\x01");
     await settle();
 
@@ -98,7 +101,7 @@ describe("useKeyHandler", () => {
   it("invokes the current render's handler, not the first one", async () => {
     function Counter() {
       const [count, setCount] = useState(0);
-      // Reads `count` from the closure: with plain useInput this stays 0.
+
       useKeyHandler((input) => {
         if (input === "+") setCount(count + 1);
       });

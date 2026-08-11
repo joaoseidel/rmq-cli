@@ -6,35 +6,38 @@ import { displayWidth } from "../../utils/width.ts";
 export interface KeyHint {
   readonly keys: string;
   readonly label: string;
+  readonly essential?: boolean;
 }
 
 export interface KeyHintsProps {
   readonly hints: readonly KeyHint[];
-  /** Hints are dropped from the end when they will not fit. */
   readonly maxWidth: number;
 }
 
 const SEPARATOR = "  ";
 
-/**
- * The footer key legend.
- *
- * Drops hints from the right rather than wrapping: a legend that reflows to a
- * second line changes the screen's chrome height mid-session and makes the
- * content area jump.
- */
+const cost = (hint: KeyHint) => displayWidth(`${hint.keys} ${hint.label}`);
+
 function KeyHintsComponent({ hints, maxWidth }: KeyHintsProps) {
-  const visible: KeyHint[] = [];
+  const essential = hints.filter((hint) => hint.essential === true);
+  const optional = hints.filter((hint) => hint.essential !== true);
+
+  const reserved = essential.reduce(
+    (sum, hint) => sum + cost(hint) + SEPARATOR.length,
+    0,
+  );
+
+  const kept: KeyHint[] = [];
   let used = 0;
 
-  for (const hint of hints) {
-    const cost =
-      displayWidth(`${hint.keys} ${hint.label}`) +
-      (visible.length === 0 ? 0 : SEPARATOR.length);
-    if (used + cost > maxWidth) break;
-    visible.push(hint);
-    used += cost;
+  for (const hint of optional) {
+    const width = cost(hint) + (kept.length === 0 ? 0 : SEPARATOR.length);
+    if (used + width + reserved > maxWidth) break;
+    kept.push(hint);
+    used += width;
   }
+
+  const visible = [...kept, ...essential];
 
   return (
     <Box>

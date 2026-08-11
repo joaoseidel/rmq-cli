@@ -6,7 +6,10 @@ import { z } from "zod";
 import { JsonSettingsStore } from "../src/adapters/storage/json-settings-store.ts";
 import { JsonConfigurationStore } from "../src/adapters/storage/json-configuration-store.ts";
 import { FileKeySecretCipher } from "../src/adapters/storage/secret-cipher.ts";
-import { ConnectionInfoSchema, type ConnectionInfo } from "../src/core/domain/connection.ts";
+import {
+  ConnectionInfoSchema,
+  type ConnectionInfo,
+} from "../src/core/domain/connection.ts";
 import { vHost } from "../src/core/domain/vhost.ts";
 
 const ItemSchema = z.object({ id: z.string(), label: z.string() });
@@ -39,11 +42,18 @@ describe("JsonSettingsStore", () => {
     const store = new JsonSettingsStore({ configDir: dir });
     store.save("things", { id: "a", label: "first" }, ItemSchema);
 
-    expect(store.findById("things", "a", ItemSchema)).toEqual({ id: "a", label: "first" });
+    expect(store.findById("things", "a", ItemSchema)).toEqual({
+      id: "a",
+      label: "first",
+    });
   });
 
   it("persists across instances", () => {
-    new JsonSettingsStore({ configDir: dir }).save("things", { id: "a", label: "first" }, ItemSchema);
+    new JsonSettingsStore({ configDir: dir }).save(
+      "things",
+      { id: "a", label: "first" },
+      ItemSchema,
+    );
 
     const reopened = new JsonSettingsStore({ configDir: dir });
     expect(reopened.list("things", ItemSchema)).toHaveLength(1);
@@ -54,7 +64,9 @@ describe("JsonSettingsStore", () => {
     store.save("things", { id: "a", label: "first" }, ItemSchema);
     store.save("things", { id: "a", label: "second" }, ItemSchema);
 
-    expect(store.list("things", ItemSchema)).toEqual([{ id: "a", label: "second" }]);
+    expect(store.list("things", ItemSchema)).toEqual([
+      { id: "a", label: "second" },
+    ]);
   });
 
   it("reports deletion of a missing item", () => {
@@ -63,7 +75,6 @@ describe("JsonSettingsStore", () => {
   });
 
   it("skips items that no longer match the schema", () => {
-    // A hand-edited or older file must not take the whole collection down.
     const store = new JsonSettingsStore({ configDir: dir });
     store.save("things", { id: "good", label: "fine" }, ItemSchema);
 
@@ -73,23 +84,29 @@ describe("JsonSettingsStore", () => {
     writeFileSync(file, JSON.stringify(document));
 
     const reopened = new JsonSettingsStore({ configDir: dir });
-    expect(reopened.list("things", ItemSchema)).toEqual([{ id: "good", label: "fine" }]);
+    expect(reopened.list("things", ItemSchema)).toEqual([
+      { id: "good", label: "fine" },
+    ]);
   });
 
   it("starts empty when the file is corrupt", () => {
     writeFileSync(join(dir, "settings.json"), "{ not json");
-    expect(new JsonSettingsStore({ configDir: dir }).list("things", ItemSchema)).toEqual([]);
+    expect(
+      new JsonSettingsStore({ configDir: dir }).list("things", ItemSchema),
+    ).toEqual([]);
   });
 
   it("adopts a collection stored as an array", () => {
-    // The previous implementation wrote arrays; those files still have to load.
     writeFileSync(
       join(dir, "settings.json"),
       JSON.stringify({ things: [{ id: "a", label: "first" }] }),
     );
 
     const store = new JsonSettingsStore({ configDir: dir });
-    expect(store.findById("things", "a", ItemSchema)).toEqual({ id: "a", label: "first" });
+    expect(store.findById("things", "a", ItemSchema)).toEqual({
+      id: "a",
+      label: "first",
+    });
   });
 });
 
@@ -99,7 +116,10 @@ describe("JsonConfigurationStore", () => {
 
   beforeEach(() => {
     dir = tempDir();
-    store = new JsonConfigurationStore(new JsonSettingsStore({ configDir: dir }), new FileKeySecretCipher(dir));
+    store = new JsonConfigurationStore(
+      new JsonSettingsStore({ configDir: dir }),
+      new FileKeySecretCipher(dir),
+    );
   });
 
   it("keeps exactly one default", () => {
@@ -136,11 +156,13 @@ describe("JsonConfigurationStore", () => {
   it("encrypts the password on disk and returns it decrypted", () => {
     store.saveConnection(connection("prod"));
 
-    const document = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"));
+    const document = JSON.parse(
+      readFileSync(join(dir, "settings.json"), "utf8"),
+    );
     const stored = document["connections"]["prod"] as ConnectionInfo;
     expect(stored.password).not.toBe("guest");
     expect(stored.password).toMatch(/^rmqenc\.v1\./);
-    expect(stored.username).toBe("guest"); // Only the password is encrypted.
+    expect(stored.username).toBe("guest");
 
     expect(store.getConnection("prod")?.password).toBe("guest");
     expect(store.listConnections()[0]?.password).toBe("guest");
@@ -152,7 +174,9 @@ describe("JsonConfigurationStore", () => {
 
     store.setDefaultConnection("second");
 
-    const document = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"));
+    const document = JSON.parse(
+      readFileSync(join(dir, "settings.json"), "utf8"),
+    );
     for (const stored of Object.values(document["connections"])) {
       expect((stored as ConnectionInfo).password).toMatch(/^rmqenc\.v1\./);
     }
@@ -168,14 +192,15 @@ describe("JsonConfigurationStore", () => {
       new FileKeySecretCipher(dir),
     );
 
-    expect(readFileSync(join(dir, "settings.json"), "utf8")).toContain("rmqenc.v1.");
+    expect(readFileSync(join(dir, "settings.json"), "utf8")).toContain(
+      "rmqenc.v1.",
+    );
     expect(upgraded.getConnection("legacy")?.password).toBe("guest");
   });
 
   it("keeps a connection listed when its password cannot be decrypted", () => {
     store.saveConnection(connection("orphan"));
 
-    // A key file restored from a different machine: same settings, wrong key.
     rmSync(join(dir, "key"));
     const reopened = new JsonConfigurationStore(
       new JsonSettingsStore({ configDir: dir }),

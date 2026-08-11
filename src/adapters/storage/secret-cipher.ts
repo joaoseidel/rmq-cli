@@ -10,28 +10,15 @@ const ALGORITHM = "aes-256-gcm";
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
 
-/**
- * Marks a value as ciphertext and pins the format, so the layout can change
- * later without guessing how an old value was encoded. Base64 never contains a
- * `.`, which makes it a safe separator for the three parts that follow.
- */
 const PREFIX = "rmqenc.v1.";
 
 export interface SecretCipher {
   encrypt(plaintext: string): string;
-  /** Returns null when the value is ciphertext this key cannot open. */
+
   decrypt(value: string): string | null;
   isEncrypted(value: string): boolean;
 }
 
-/**
- * AES-256-GCM with a random key kept in `<configDir>/key` at `0600`.
- *
- * This protects passwords against casual disclosure — a synced dotfile
- * directory, a home backup, a shoulder-surfed `cat settings.json`. It is not a
- * defence against an attacker who can already read your home directory, since
- * the key sits beside the data; an OS keychain would be needed for that.
- */
 export class FileKeySecretCipher implements SecretCipher {
   private readonly key: Buffer;
 
@@ -54,7 +41,6 @@ export class FileKeySecretCipher implements SecretCipher {
   }
 
   decrypt(value: string): string | null {
-    // Settings written before encryption existed hold the password verbatim.
     if (!this.isEncrypted(value)) return value;
 
     const [iv, tag, ciphertext] = value
@@ -94,8 +80,7 @@ function loadOrCreateKey(configDir: string): Buffer {
   try {
     mkdirSync(configDir, { recursive: true });
     const key = randomBytes(KEY_BYTES);
-    // `wx` fails rather than clobbering a key another process just wrote —
-    // overwriting one would strand every password already encrypted with it.
+
     writeFileSync(keyPath, `${key.toString("base64")}\n`, {
       encoding: "utf8",
       mode: 0o600,
@@ -120,7 +105,7 @@ function readKey(keyPath: string): Buffer | null {
   try {
     content = readFileSync(keyPath, "utf8");
   } catch {
-    return null; // First run: no key yet.
+    return null;
   }
 
   const key = Buffer.from(content.trim(), "base64");

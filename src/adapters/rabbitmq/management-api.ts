@@ -9,7 +9,6 @@ import { createLogger } from "../../core/util/logger.ts";
 
 const logger = createLogger("management-api");
 
-/** Page size for queue listings. Large enough that most brokers need one call. */
 const PAGE_SIZE = 500;
 
 export class ManagementApiError extends Error {

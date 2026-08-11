@@ -3,7 +3,6 @@ import { displayExchange, type Message } from "../../../core/domain/message.ts";
 import { borders, theme } from "../../theme.ts";
 import { displayWidth } from "../../utils/width.ts";
 
-/** Pretty-prints a JSON payload; returns the original text when it is not JSON. */
 function formatPayload(payload: string): string {
   const trimmed = payload.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return payload;
@@ -15,24 +14,10 @@ function formatPayload(payload: string): string {
   }
 }
 
-/**
- * The payload as displayed lines, after any JSON re-indentation.
- *
- * Formatting is the expensive part — a parse and a re-serialise of the whole
- * body — so the caller does it once and holds the result, rather than every
- * component that needs a line count redoing it on each keystroke.
- */
 export function formatPayloadLines(payload: string): string[] {
   return formatPayload(payload).split("\n");
 }
 
-/**
- * Slices the formatted payload to a window of lines.
- *
- * Ink has no scrollable viewport, so a long payload has to be cut down before it
- * is rendered — otherwise it simply overflows the terminal and pushes the rest
- * of the screen out of view.
- */
 function windowPayload(
   lines: readonly string[],
   window: { offset: number; height: number } | undefined,
@@ -65,22 +50,12 @@ function Field({
 
 export interface MessageDetailProps {
   readonly message: Message;
-  /** The formatted payload, already split into lines by {@link formatPayloadLines}. */
   readonly payloadLines: readonly string[];
   readonly width: number;
-  /** Renders headers and properties as well as the core fields. */
   readonly verbose?: boolean;
-  /** Limits the payload to a window of lines. Omit to render it in full. */
   readonly payloadWindow?: { readonly offset: number; readonly height: number };
 }
 
-/**
- * Full single-message view.
- *
- * JSON payloads are re-indented because inspecting a message almost always means
- * reading its body, and a single-line blob of JSON is the one thing the previous
- * table-based output made hardest.
- */
 export function MessageDetail({
   message,
   payloadLines,

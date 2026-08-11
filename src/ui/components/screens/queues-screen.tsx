@@ -6,6 +6,7 @@ import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import type { ActionId } from "../../actions.ts";
 import { useAsync } from "../../hooks/use-async.ts";
 import { useFilterableList } from "../../hooks/use-filterable-list.ts";
+import type { ListMemory } from "../../hooks/use-list-memory.ts";
 import { useScreenKeys } from "../../hooks/use-screen-keys.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { FilterBar } from "../parts/filter-bar.tsx";
@@ -16,20 +17,11 @@ import { QueueTable } from "../parts/tables.tsx";
 export interface QueuesScreenProps {
   readonly loadQueues: () => Promise<Queue[]>;
   readonly onOpen: (queue: Queue) => void;
-  /** Publishes the highlighted row so the app can act on it. */
   readonly onSelectionChange: (queue: Queue | null) => void;
-  /**
-   * Publishes the filtered set, which is what a cross-queue search runs over.
-   * Separate from the selection: the search acts on every row the filter left,
-   * not on the one under the cursor.
-   */
   readonly onScopeChange: (queues: readonly Queue[], filter: string) => void;
+  readonly onMarkedChange: (queues: readonly Queue[]) => void;
+  readonly memory: ListMemory;
   readonly onAction: (id: ActionId) => void;
-  /**
-   * Set by the palette's Filter action. The screen opens its filter field and
-   * calls `onFilterOpened` to clear the request — a plain counter would not
-   * survive the remount caused by the palette closing.
-   */
   readonly openFilter: boolean;
   readonly onFilterOpened: () => void;
   readonly width: number;
@@ -38,23 +30,15 @@ export interface QueuesScreenProps {
 }
 
 const searchableFields = (queue: Queue) => [queue.name];
+const queueKey = (queue: Queue) => `${queue.vhost}/${queue.name}`;
 
-/**
- * The queue browser: the app's home screen.
- *
- * Filtering is client-side over the already-loaded list, which keeps typing
- * instant and avoids a management API round trip per keystroke. `r` re-reads
- * when the broker has moved on.
- *
- * Rows are windowed to the visible height rather than rendered in full — a
- * broker with thousands of queues would otherwise rebuild the entire table on
- * every cursor move.
- */
 export function QueuesScreen({
   loadQueues,
   onOpen,
   onSelectionChange,
   onScopeChange,
+  onMarkedChange,
+  memory,
   onAction,
   openFilter,
   onFilterOpened,
@@ -62,8 +46,6 @@ export function QueuesScreen({
   height,
   isActive,
 }: QueuesScreenProps) {
-  // `loadQueues` is rebuilt by the app whenever the connection changes or a
-  // refresh is requested, so its identity is the reload trigger.
   const { state } = useAsync(loadQueues, [loadQueues]);
   const queues = state.status === "success" ? state.data : [];
 
@@ -76,6 +58,10 @@ export function QueuesScreen({
     onSelectionChange,
     openFilter,
     onFilterOpened,
+    onMarkedChange,
+    memory,
+    memoryKey: "queues",
+    key: queueKey,
   });
 
   useEffect(() => {
@@ -84,7 +70,11 @@ export function QueuesScreen({
 
   useScreenKeys("queues", onAction, {
     isActive: isActive && !list.filtering,
-    local: { "/": list.startFiltering },
+    local: {
+      "/": list.startFiltering,
+      " ": list.toggleMark,
+      a: list.toggleMarkAll,
+    },
   });
 
   if (state.status === "pending") return <Spinner label="Loading queues…" />;
@@ -112,9 +102,13 @@ export function QueuesScreen({
             width={width}
             pattern={list.filter}
             selectedIndex={list.selectedIndex - start}
+            isMarked={list.isMarked}
           />
           <Text color={theme.muted}>
             {list.selectedIndex + 1}/{list.visible.length}
+            {list.marked.length === 0
+              ? ""
+              : ` ${glyphs.bullet} ${formatCount(list.marked.length, "queue")} marked`}
             {list.selected === null
               ? ""
               : ` ${glyphs.bullet} ${formatCount(totalMessages(list.selected), "message")} in ${list.selected.name}`}

@@ -12,7 +12,6 @@ import {
 export interface SelectItem<V> {
   readonly value: V;
   readonly label: string;
-  /** Secondary text shown after the label, e.g. a count or a hint. */
   readonly detail?: string;
   readonly disabled?: boolean;
 }
@@ -24,9 +23,7 @@ export interface SelectProps<V> {
   readonly isActive?: boolean;
   readonly visibleCount?: number;
   readonly width?: number;
-  /** Shown in place of the list when `items` is empty. */
   readonly emptyLabel?: string;
-  /** Disable when a text field shares the screen — see `useListNavigation`. */
   readonly letterKeys?: boolean;
 }
 
@@ -73,8 +70,6 @@ function SelectComponent<V>({
     },
   });
 
-  // Escape is handled here rather than in the navigation hook so it still works
-  // when the list is empty and navigation has nothing to do.
   useKeyHandler(
     (_input, key) => {
       if (key.escape) onCancel?.();
@@ -88,9 +83,6 @@ function SelectComponent<V>({
 
   const [start, end] = navigation.visibleRange;
 
-  // Details are right-aligned into a column so the list reads as a table rather
-  // than a run-on sentence per row. Measuring walks every item, not just the
-  // visible ones, so it is held until the items or the width actually change.
   const { hasDetail, labelColumn } = layout;
 
   return (
@@ -142,13 +134,6 @@ function SelectComponent<V>({
   );
 }
 
-/**
- * Re-renders only when the visible data actually changes.
- *
- * Identity comparison on `items` is not enough: callers build the array inline
- * from a filter, so a fresh array arrives on every keystroke even when the
- * contents are identical.
- */
 function arePropsEqual<V>(
   previous: SelectProps<V>,
   next: SelectProps<V>,

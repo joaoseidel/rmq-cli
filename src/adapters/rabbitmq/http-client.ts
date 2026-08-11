@@ -15,7 +15,7 @@ import { BaseBrokerClient } from "./base-client.ts";
 export class UnsupportedOverHttpError extends Error {
   constructor(operation: string) {
     super(
-      `${operation} is not supported over the HTTP management API — use an AMQP connection instead`,
+      `${operation} is not supported over the HTTP management API; use an AMQP connection instead`,
     );
     this.name = "UnsupportedOverHttpError";
   }
@@ -26,9 +26,7 @@ class HttpBrokerConnection implements BrokerConnection {
 
   constructor(readonly info: ConnectionInfo) {}
 
-  async close(): Promise<void> {
-    // Nothing to release.
-  }
+  async close(): Promise<void> {}
 }
 
 export class HttpBrokerClient extends BaseBrokerClient {
@@ -66,8 +64,6 @@ export class HttpBrokerClient extends BaseBrokerClient {
     queueName: string,
     connection: BrokerConnection,
   ): Promise<PurgeResult> {
-    // The management API's purge endpoint returns no body, so the count is
-    // genuinely unknown here rather than merely unread.
     const ok = await this.management(connection.info).purgeQueue(queueName);
     return { ok, purged: null };
   }

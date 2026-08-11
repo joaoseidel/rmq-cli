@@ -1,21 +1,14 @@
 import { useCallback, useState } from "react";
 
-/**
- * A navigation stack of screens.
- *
- * The TUI drills down — queues → queue → message — and Escape has to unwind
- * exactly one level. A stack models that directly, and each entry carries its
- * own parameters so a screen never has to reconstruct where it came from.
- *
- * The root entry is never popped, so `current` is always defined.
- */
 export interface ScreenStack<S> {
   readonly current: S;
+  readonly previous: S | undefined;
   readonly depth: number;
   readonly canGoBack: boolean;
   readonly push: (screen: S) => void;
   readonly replace: (screen: S) => void;
   readonly back: () => void;
+  readonly popUntil: (keep: (screen: S) => boolean) => void;
   readonly reset: () => void;
 }
 
@@ -36,18 +29,28 @@ export function useScreenStack<S>(root: S): ScreenStack<S> {
     );
   }, []);
 
+  const popUntil = useCallback((keep: (screen: S) => boolean) => {
+    setStack((current) => {
+      let end = current.length;
+
+      while (end > 1 && !keep(current[end - 1] as S)) end -= 1;
+      return end === current.length ? current : current.slice(0, end);
+    });
+  }, []);
+
   const reset = useCallback(() => setStack([root]), [root]);
 
-  // The stack is seeded with the root and pops stop at length 1.
   const current = stack[stack.length - 1] as S;
 
   return {
     current,
+    previous: stack[stack.length - 2],
     depth: stack.length,
     canGoBack: stack.length > 1,
     push,
     replace,
     back,
+    popUntil,
     reset,
   };
 }

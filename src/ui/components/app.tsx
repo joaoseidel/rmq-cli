@@ -1,41 +1,58 @@
 import { Box, Text, useApp } from "ink";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Container } from "../../container.ts";
 import { isAmqp, type ConnectionInfo } from "../../core/domain/connection.ts";
-import type { Message } from "../../core/domain/message.ts";
+import { displayExchange, type Message } from "../../core/domain/message.ts";
 import type { Queue } from "../../core/domain/queue.ts";
 import { totalMessages } from "../../core/domain/queue.ts";
 import { errorMessage, formatCount } from "../../core/util/text.ts";
-import { paletteActions, type ActionId } from "../actions.ts";
+import { paletteActions, rowActions, type ActionId } from "../actions.ts";
 import {
   InputCaptureProvider,
   useInputCaptured,
 } from "../hooks/use-input-capture.tsx";
 import { useKeyHandler } from "../hooks/use-key-handler.ts";
+import { useListMemory } from "../hooks/use-list-memory.ts";
 import { useScreenStack } from "../hooks/use-screen-stack.ts";
 import { useTerminalSize } from "../hooks/use-terminal-size.ts";
 import { bindingsFor } from "../keymap.ts";
-import { effectiveSelection, screenTitle, type Screen } from "../screens.ts";
+import {
+  effectiveSelection,
+  screenTitle,
+  type PublishedSelection,
+  type Screen,
+} from "../screens.ts";
 import { glyphs, theme } from "../theme.ts";
 import { Confirm } from "./common/confirm.tsx";
 import { CommandPalette } from "./parts/command-palette.tsx";
+import { RowMenu } from "./parts/row-menu.tsx";
 import type { KeyHint } from "./parts/key-hints.tsx";
 import { SCREEN_CHROME_LINES, ScreenFrame } from "./parts/screen-frame.tsx";
 import { StatusMessage } from "./parts/status-message.tsx";
 import { ScreenRouter, type ScreenContext } from "./screen-router.tsx";
 import { ConnectionFormScreen } from "./screens/connection-form-screen.tsx";
 
-/** Messages fetched per queue in the browser. Enough to explore, bounded. */
 const MESSAGE_PAGE_SIZE = 200;
 
-/** A destructive action awaiting confirmation. */
+const NOTICE_MS = 4000;
+const DANGER_NOTICE_MS = 10_000;
+
 type PendingAction =
-  | { readonly kind: "purge"; readonly queue: Queue }
+  | { readonly kind: "purge"; readonly queues: readonly Queue[] }
   | {
       readonly kind: "delete";
       readonly queue: Queue;
-      readonly message: Message;
+      readonly messages: readonly Message[];
     };
+
+interface Overlay {
+  readonly kind: "palette" | "row";
+  readonly selection: PublishedSelection;
+  readonly marked: {
+    readonly queues: readonly Queue[];
+    readonly messages: readonly Message[];
+  };
+}
 
 interface Notice {
   readonly tone: "success" | "danger";
@@ -46,50 +63,104 @@ export interface AppProps {
   readonly container: Container;
 }
 
-const BASE_HINTS: KeyHint[] = [
-  { keys: ":", label: "actions" },
-  { keys: "?", label: "help" },
-  { keys: "esc", label: "back" },
-  { keys: "q", label: "quit" },
+const ROW_MENU_HINTS: KeyHint[] = [
+  { keys: "↑↓", label: "move" },
+  { keys: "⏎", label: "run" },
+  { keys: "esc", label: "close", essential: true },
 ];
 
 const PALETTE_HINTS: KeyHint[] = [
   { keys: "↑↓", label: "move" },
   { keys: "⏎", label: "run" },
   { keys: "type", label: "filter actions" },
-  { keys: "esc", label: "close" },
+  { keys: "esc", label: "close", essential: true },
 ];
 
 const CONFIRM_HINTS: KeyHint[] = [
-  { keys: "y", label: "confirm" },
-  { keys: "n", label: "cancel" },
-  { keys: "esc", label: "cancel" },
+  { keys: "y", label: "confirm", essential: true },
+  { keys: "n", label: "cancel", essential: true },
 ];
 
-/** Footer legend, derived from the one table that also drives key dispatch. */
-function hintsFor(screen: Screen["name"]): KeyHint[] {
+const TYPING_HINTS: KeyHint[] = [
+  { keys: "⏎", label: "confirm", essential: true },
+  { keys: "esc", label: "cancel", essential: true },
+];
+
+function hintsFor(
+  screen: Screen["name"],
+  options: { typing: boolean; canGoBack: boolean },
+): KeyHint[] {
+  if (options.typing) return TYPING_HINTS;
+
   const screenHints = bindingsFor(screen)
     .filter(
       (binding) => binding.displayOnly === true || binding.primary === true,
     )
     .map((binding) => ({ keys: binding.key, label: binding.label }));
 
-  return [...screenHints, ...BASE_HINTS];
+  return [
+    ...screenHints,
+    { keys: ".", label: "row menu" },
+    { keys: ":", label: "actions", essential: true },
+    { keys: "?", label: "help", essential: true },
+    options.canGoBack
+      ? { keys: "esc/q", label: "back", essential: true }
+      : { keys: "q", label: "quit", essential: true },
+  ];
 }
 
-/**
- * Root of the application.
- *
- * Owns the state that outlives any single screen: the navigation stack, the
- * active connection, the pending destructive action, and the last status
- * message. Confirmation lives here rather than in the screen that raised it, so
- * there is exactly one place in the app that can destroy data.
- *
- * Screens open short-lived broker connections per fetch instead of holding one
- * open. A browser can sit idle for a long time and a parked AMQP channel would
- * be dropped by the broker's heartbeat; the live tail is the deliberate
- * exception and manages its own.
- */
+function rowMenuSubject(selection: PublishedSelection): {
+  subject: string;
+  detail?: string;
+} {
+  const { queue, message } = selection;
+
+  if (message !== null) {
+    return {
+      subject: message.id,
+      detail: `${displayExchange(message)} ${glyphs.arrowRight} ${message.routingKey}`,
+    };
+  }
+
+  if (queue !== null) {
+    return {
+      subject: queue.name,
+      detail: `${formatCount(totalMessages(queue), "message")} in ${queue.vhost}`,
+    };
+  }
+
+  return { subject: "Nothing selected" };
+}
+
+function confirmationFor(pending: PendingAction): string {
+  if (pending.kind === "purge") {
+    const total = pending.queues.reduce(
+      (sum, queue) => sum + totalMessages(queue),
+      0,
+    );
+
+    if (pending.queues.length === 1) {
+      const only = pending.queues[0];
+      return `Purge '${only?.name}' (${formatCount(total, "message")})? This cannot be undone.`;
+    }
+
+    const names = pending.queues
+      .slice(0, 3)
+      .map((queue) => queue.name)
+      .join(", ");
+    const rest =
+      pending.queues.length > 3
+        ? `, and ${pending.queues.length - 3} more`
+        : "";
+
+    return `Purge ${formatCount(pending.queues.length, "queue")} (${names}${rest}), ${formatCount(total, "message")}? This cannot be undone.`;
+  }
+
+  return pending.messages.length === 1
+    ? `Delete this message from '${pending.queue.name}'?`
+    : `Delete ${formatCount(pending.messages.length, "message")} from '${pending.queue.name}'? The rest of the queue is put back.`;
+}
+
 function AppContent({ container }: AppProps) {
   const { columns, rows } = useTerminalSize();
   const { exit } = useApp();
@@ -99,21 +170,16 @@ function AppContent({ container }: AppProps) {
   );
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  // Set by the palette's Filter action and cleared by whichever list screen
-  // picks it up. Not a counter: the palette unmounts the screen underneath it,
-  // so the screen cannot remember a previous value to compare against.
+
   const [filterRequested, setFilterRequested] = useState(false);
 
+  const listMemory = useListMemory();
   const typing = useInputCaptured();
   const stack = useScreenStack<Screen>({ name: "queues" });
   const screen = stack.current;
 
-  // Screens report their current selection so the palette and shortcuts can act
-  // on it without the app duplicating each screen's list state. A ref, not
-  // state: the selection changes on every cursor move and re-rendering the whole
-  // app for that would make scrolling visibly slow.
   const selectionRef = useRef<{ queue: Queue | null; message: Message | null }>(
     { queue: null, message: null },
   );
@@ -126,19 +192,38 @@ function AppContent({ container }: AppProps) {
     selectionRef.current = { ...selectionRef.current, message };
   }, []);
 
-  // The queue browser's filtered set, held for the cross-queue search. A ref for
-  // the same reason as the selection: it changes on every keystroke of the
-  // filter, and re-rendering the app for that would make typing feel sticky.
   const queueScopeRef = useRef<{
     queues: readonly Queue[];
     filter: string;
   }>({ queues: [], filter: "" });
+
+  const markedRef = useRef<{
+    queues: readonly Queue[];
+    messages: readonly Message[];
+  }>({ queues: [], messages: [] });
+
+  const setMarkedQueues = useCallback((queues: readonly Queue[]) => {
+    markedRef.current = { ...markedRef.current, queues };
+  }, []);
+
+  const setMarkedMessages = useCallback((messages: readonly Message[]) => {
+    markedRef.current = { ...markedRef.current, messages };
+  }, []);
 
   const setQueueScope = useCallback(
     (queues: readonly Queue[], filter: string) => {
       queueScopeRef.current = { queues, filter };
     },
     [],
+  );
+
+  const snapshot = useCallback(
+    (kind: Overlay["kind"]): Overlay => ({
+      kind,
+      selection: effectiveSelection(stack.current, selectionRef.current),
+      marked: markedRef.current,
+    }),
+    [stack],
   );
 
   const refresh = useCallback(() => setReloadToken((value) => value + 1), []);
@@ -151,12 +236,22 @@ function AppContent({ container }: AppProps) {
     [],
   );
 
+  useEffect(() => {
+    if (notice === null) return;
+
+    const timer = setTimeout(
+      () => setNotice(null),
+      notice.tone === "danger" ? DANGER_NOTICE_MS : NOTICE_MS,
+    );
+
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const loadQueues = useCallback(async () => {
     if (connection === null) return [];
     return container.broker.withConnection(connection, (open) =>
       container.queues.listQueues(open, null),
     );
-    // reloadToken re-runs the fetch without changing the connection identity.
   }, [container, connection, reloadToken]);
 
   const loadMessages = useCallback(
@@ -180,41 +275,70 @@ function AppContent({ container }: AppProps) {
 
       try {
         if (action.kind === "purge") {
-          const { ok, purged } = await container.broker.withConnection(
+          const outcomes = await container.broker.withConnection(
             connection,
-            (open) => container.queues.purgeQueue(action.queue.name, open),
+            async (open) => {
+              const results = [];
+              for (const queue of action.queues) {
+                results.push({
+                  queue,
+                  ...(await container.queues.purgeQueue(queue.name, open)),
+                });
+              }
+              return results;
+            },
           );
 
-          if (!ok) announce(`Failed to purge ${action.queue.name}.`, "danger");
-          else if (purged === null) announce(`Purged ${action.queue.name}.`);
-          else
+          const failed = outcomes.filter((entry) => !entry.ok);
+          const removed = outcomes.reduce(
+            (sum, entry) => sum + (entry.purged ?? 0),
+            0,
+          );
+
+          if (failed.length > 0) {
             announce(
-              `Purged ${action.queue.name} — ${formatCount(purged, "message")} removed.`,
+              `Failed to purge ${failed.map((entry) => entry.queue.name).join(", ")}.`,
+              "danger",
             );
+          } else if (outcomes.length === 1) {
+            const only = outcomes[0];
+            announce(
+              only?.purged == null
+                ? `Purged ${only?.queue.name}.`
+                : `Purged ${only.queue.name}: ${formatCount(only.purged, "message")} removed.`,
+            );
+          } else {
+            announce(
+              `Purged ${formatCount(outcomes.length, "queue")}: ${formatCount(removed, "message")} removed.`,
+            );
+          }
         } else {
           const outcome = await container.broker.withConnection(
             connection,
             (open) =>
-              container.messages.safeDeleteMessage({
-                id: action.message.id,
+              container.messages.removeFromQueue({
+                targets: action.messages.map((message) => message.id),
                 queueName: action.queue.name,
                 connection: open,
               }),
           );
 
-          // The count of restored bystanders is worth showing: it is the
-          // evidence that the drain-and-restore put the queue back.
           if (outcome.lost > 0) {
             announce(
-              `Deleted, but ${formatCount(outcome.lost, "message")} could not be put back — ` +
+              `Deleted, but ${formatCount(outcome.lost, "message")} could not be put back, ` +
                 `saved under operation ${outcome.operationId}.`,
               "danger",
             );
           } else if (outcome.removed === 0) {
-            announce("That message was no longer in the queue.", "danger");
+            announce(
+              action.messages.length === 1
+                ? "That message was no longer in the queue."
+                : "None of those messages were still in the queue.",
+              "danger",
+            );
           } else {
             announce(
-              `Deleted 1 message from ${action.queue.name}` +
+              `Deleted ${formatCount(outcome.removed, "message")} from ${action.queue.name}` +
                 (outcome.restored > 0
                   ? `, ${formatCount(outcome.restored, "message")} left untouched.`
                   : "."),
@@ -226,17 +350,35 @@ function AppContent({ container }: AppProps) {
       } finally {
         setPending(null);
         refresh();
+        listMemory.clearMarks();
+
+        if (action.kind === "delete") {
+          stack.popUntil((screen) => screen.name !== "message");
+        }
       }
     },
-    [container, connection, announce, refresh],
+    [container, connection, announce, refresh, stack, listMemory],
   );
 
-  /** Executes a palette entry or its keyboard equivalent. */
   const runAction = useCallback(
-    (id: ActionId) => {
+    (id: ActionId, from?: Overlay) => {
       const { queue: currentQueue, message: currentMessage } =
-        effectiveSelection(screen, selectionRef.current);
-      const { queue, message } = selectionRef.current;
+        from?.selection ?? effectiveSelection(screen, selectionRef.current);
+      const marks = from?.marked ?? markedRef.current;
+
+      const targetQueues =
+        marks.queues.length > 0
+          ? marks.queues
+          : currentQueue === null
+            ? []
+            : [currentQueue];
+
+      const targetMessages =
+        marks.messages.length > 0
+          ? marks.messages
+          : currentMessage === null
+            ? []
+            : [currentMessage];
 
       switch (id) {
         case "queues":
@@ -247,15 +389,19 @@ function AppContent({ container }: AppProps) {
           announce("Reloaded from the broker.");
           break;
         case "open":
-          if (screen.name === "queues" && queue !== null)
-            stack.push({ name: "queue", queue });
-          else if (screen.name === "queue" && message !== null) {
-            stack.push({ name: "message", queue: screen.queue, message });
+          if (screen.name === "queues" && currentQueue !== null)
+            stack.push({ name: "queue", queue: currentQueue });
+          else if (screen.name === "queue" && currentMessage !== null) {
+            stack.push({
+              name: "message",
+              queue: screen.queue,
+              message: currentMessage,
+            });
           }
           break;
         case "purge":
-          if (currentQueue !== null)
-            setPending({ kind: "purge", queue: currentQueue });
+          if (targetQueues.length > 0)
+            setPending({ kind: "purge", queues: targetQueues });
           break;
         case "consume":
           if (currentQueue !== null)
@@ -284,11 +430,11 @@ function AppContent({ container }: AppProps) {
           );
           break;
         case "requeue-message":
-          if (currentQueue !== null && currentMessage !== null) {
+          if (currentQueue !== null && targetMessages.length > 0) {
             stack.push({
               name: "move-message",
               queue: currentQueue,
-              message: currentMessage,
+              messages: targetMessages,
               mode: "move",
             });
           } else {
@@ -296,11 +442,11 @@ function AppContent({ container }: AppProps) {
           }
           break;
         case "reprocess-message":
-          if (currentQueue !== null && currentMessage !== null) {
+          if (currentQueue !== null && targetMessages.length > 0) {
             stack.push({
               name: "move-message",
               queue: currentQueue,
-              message: currentMessage,
+              messages: targetMessages,
               mode: "reprocess",
             });
           } else {
@@ -308,11 +454,11 @@ function AppContent({ container }: AppProps) {
           }
           break;
         case "delete-message":
-          if (currentQueue !== null && currentMessage !== null) {
+          if (currentQueue !== null && targetMessages.length > 0) {
             setPending({
               kind: "delete",
               queue: currentQueue,
-              message: currentMessage,
+              messages: targetMessages,
             });
           } else {
             announce("Select a message first.", "danger");
@@ -340,7 +486,6 @@ function AppContent({ container }: AppProps) {
           break;
         }
         case "filter":
-          // The list screens own their filter field; bump a token they watch.
           if (screen.name === "queues" || screen.name === "queue")
             setFilterRequested(true);
           else announce("Nothing to filter on this screen.", "danger");
@@ -353,8 +498,6 @@ function AppContent({ container }: AppProps) {
     [screen, stack, refresh, exit, announce],
   );
 
-  // Global keys stand down while a prompt is open, the palette is showing, or a
-  // text field owns the keyboard — otherwise typing a 'q' would quit mid-word.
   useKeyHandler(
     (input, key) => {
       if (key.ctrl && input === "c") {
@@ -363,12 +506,25 @@ function AppContent({ container }: AppProps) {
       }
 
       if (input === ":") {
-        setPaletteOpen(true);
+        setOverlay(snapshot("palette"));
+        return;
+      }
+
+      if (input === ".") {
+        const taken = snapshot("row");
+        if (
+          taken.selection.queue === null &&
+          taken.selection.message === null
+        ) {
+          announce("Nothing selected.", "danger");
+          return;
+        }
+        setOverlay(taken);
         return;
       }
 
       if (input === "?") {
-        stack.push({ name: "help" });
+        if (screen.name !== "help") stack.push({ name: "help" });
         return;
       }
 
@@ -381,7 +537,7 @@ function AppContent({ container }: AppProps) {
         }
       }
     },
-    { isActive: pending === null && !paletteOpen && !typing },
+    { isActive: pending === null && overlay === null && !typing },
   );
 
   const subtitle = useMemo(
@@ -392,18 +548,16 @@ function AppContent({ container }: AppProps) {
     [connection],
   );
 
-  const interactive = pending === null && !paletteOpen;
-  const contentHeight = Math.max(
-    3,
-    rows - SCREEN_CHROME_LINES - (notice === null ? 0 : 1),
-  );
+  const interactive = pending === null && overlay === null;
+
+  const contentHeight = Math.max(3, rows - SCREEN_CHROME_LINES - 1);
   const status =
-    notice === null ? undefined : (
+    notice === null ? (
+      <Text> </Text>
+    ) : (
       <StatusMessage tone={notice.tone}>{notice.text}</StatusMessage>
     );
 
-  // Nothing else is reachable without a broker, so a first run opens straight on
-  // the connection form rather than an empty queue list.
   if (connection === null) {
     return (
       <ScreenFrame
@@ -431,6 +585,14 @@ function AppContent({ container }: AppProps) {
 
   const active = connection;
 
+  const contextFor = (open: Overlay) => ({
+    screen: screen.name,
+    selection: open.selection,
+    row:
+      screen.name === "queues" ? open.selection.queue : open.selection.message,
+    isAmqp: isAmqp(active),
+  });
+
   const screenContext: ScreenContext = {
     container,
     connection: active,
@@ -444,15 +606,22 @@ function AppContent({ container }: AppProps) {
     runAction,
     push: stack.push,
     back: stack.back,
+    popUntil: stack.popUntil,
     reset: stack.reset,
-    setConnection,
+
+    setConnection: (next: ConnectionInfo) => {
+      listMemory.clear();
+      queueScopeRef.current = { queues: [], filter: "" };
+      setConnection(next);
+    },
     switchVHost: (vhost) => {
-      // Persisted through the store so the choice survives a restart.
       void container.broker
         .withConnection(active, (open) =>
           container.vhosts.setDefault(vhost.name, open),
         )
         .then(() => {
+          listMemory.clear();
+          queueScopeRef.current = { queues: [], filter: "" };
           setConnection({ ...active, vHost: vhost });
           announce(`Switched to vhost ${vhost.name}.`);
           stack.reset();
@@ -461,7 +630,12 @@ function AppContent({ container }: AppProps) {
     },
     onQueueSelectionChange: setQueueSelection,
     onMessageSelectionChange: setMessageSelection,
+    onMarkedQueuesChange: setMarkedQueues,
+    onMarkedMessagesChange: setMarkedMessages,
     onQueueScopeChange: setQueueScope,
+    listMemory,
+
+    helpFrom: stack.previous?.name ?? "queues",
     filterRequested,
     onFilterOpened: clearFilterRequest,
   };
@@ -476,43 +650,45 @@ function AppContent({ container }: AppProps) {
         </Text>
       }
       hints={
-        paletteOpen
+        overlay?.kind === "palette"
           ? PALETTE_HINTS
-          : pending !== null
-            ? CONFIRM_HINTS
-            : hintsFor(screen.name)
+          : overlay?.kind === "row"
+            ? ROW_MENU_HINTS
+            : pending !== null
+              ? CONFIRM_HINTS
+              : hintsFor(screen.name, { typing, canGoBack: stack.canGoBack })
       }
       status={status}
       width={columns}
       height={rows}
     >
-      {paletteOpen ? (
-        <CommandPalette
-          actions={paletteActions({
-            screen: screen.name,
-            selection: effectiveSelection(screen, selectionRef.current),
-            row:
-              screen.name === "queues"
-                ? selectionRef.current.queue
-                : selectionRef.current.message,
-            isAmqp: isAmqp(active),
-          })}
+      {overlay?.kind === "row" ? (
+        <RowMenu
+          {...rowMenuSubject(overlay.selection)}
+          actions={rowActions(contextFor(overlay))}
           width={columns}
           height={contentHeight}
-          onCancel={() => setPaletteOpen(false)}
+          onCancel={() => setOverlay(null)}
           onRun={(id) => {
-            setPaletteOpen(false);
-            runAction(id as ActionId);
+            setOverlay(null);
+            runAction(id as ActionId, overlay);
+          }}
+        />
+      ) : overlay?.kind === "palette" ? (
+        <CommandPalette
+          actions={paletteActions(contextFor(overlay))}
+          width={columns}
+          height={contentHeight}
+          onCancel={() => setOverlay(null)}
+          onRun={(id) => {
+            setOverlay(null);
+            runAction(id as ActionId, overlay);
           }}
         />
       ) : pending !== null ? (
         <Box flexDirection="column">
           <Confirm
-            message={
-              pending.kind === "purge"
-                ? `Purge '${pending.queue.name}' (${formatCount(totalMessages(pending.queue), "message")})? This cannot be undone.`
-                : `Delete this message from '${pending.queue.name}'?`
-            }
+            message={confirmationFor(pending)}
             onAnswer={(confirmed) => {
               if (confirmed) void runPending(pending);
               else setPending(null);
@@ -526,7 +702,6 @@ function AppContent({ container }: AppProps) {
   );
 }
 
-/** Wraps the app in the input-capture provider it reads from. */
 export function App(props: AppProps) {
   return (
     <InputCaptureProvider>

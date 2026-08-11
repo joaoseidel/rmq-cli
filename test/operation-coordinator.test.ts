@@ -9,6 +9,8 @@ import { messageId } from "../src/core/domain/message-id.ts";
 import { failure, success } from "../src/core/domain/operation.ts";
 import type { Message } from "../src/core/domain/message.ts";
 import type { MessageBackupRepository } from "../src/core/ports/stores.ts";
+import { QueueOperations } from "../src/core/usecase/queue-operations.ts";
+import { FakeBroker, testConnection } from "./fake-broker.ts";
 
 function message(id: string): Message {
   return {
@@ -24,7 +26,9 @@ function message(id: string): Message {
 
 function newRepository(): JsonMessageBackupRepository {
   const dir = mkdtempSync(join(tmpdir(), "rmq-ops-"));
-  return new JsonMessageBackupRepository(new JsonSettingsStore({ configDir: dir, fileName: "backups" }));
+  return new JsonMessageBackupRepository(
+    new JsonSettingsStore({ configDir: dir, fileName: "backups" }),
+  );
 }
 
 describe("BackedUpOperationCoordinator", () => {
@@ -53,12 +57,14 @@ describe("BackedUpOperationCoordinator", () => {
       operationType: "test",
       provideMessages: async () => [message("a"), message("b")],
       process: async (item) =>
-        item.payload.endsWith("a") ? success(item.id) : failure(item.id, "nope"),
+        item.payload.endsWith("a")
+          ? success(item.id)
+          : failure(item.id, "nope"),
     });
 
     expect(summary.successful).toBe(1);
     expect(summary.failed).toBe(1);
-    // The unrecovered message is the whole point of the backup.
+
     expect(summary.unprocessedMessages).toHaveLength(1);
     expect(repository.getUnprocessedMessages(summary.id)).toHaveLength(1);
   });
@@ -88,7 +94,6 @@ describe("BackedUpOperationCoordinator", () => {
   });
 
   it("aborts without processing when the backup cannot be written", async () => {
-    // Losing messages with no record of them is the one outcome to avoid.
     const brokenBackups: MessageBackupRepository = {
       storeMessages: () => false,
       markMessageAsProcessed: () => false,
@@ -98,7 +103,9 @@ describe("BackedUpOperationCoordinator", () => {
     };
 
     let processed = 0;
-    const summary = await new BackedUpOperationCoordinator(brokenBackups).executeOperation({
+    const summary = await new BackedUpOperationCoordinator(
+      brokenBackups,
+    ).executeOperation({
       operationType: "test",
       provideMessages: async () => [message("a")],
       process: async (item) => {
@@ -131,7 +138,11 @@ describe("BackedUpOperationCoordinator", () => {
       process: async (item) => success(item.id),
     });
 
-    expect(repository.listPendingOperations().some((entry) => entry.id === summary.id)).toBe(false);
+    expect(
+      repository
+        .listPendingOperations()
+        .some((entry) => entry.id === summary.id),
+    ).toBe(false);
   });
 
   it("retains the backup when something failed", async () => {
@@ -141,6 +152,67 @@ describe("BackedUpOperationCoordinator", () => {
       process: (item) => Promise.resolve(failure(item.id, "nope")),
     });
 
-    expect(repository.listPendingOperations().some((entry) => entry.id === summary.id)).toBe(true);
+    expect(
+      repository
+        .listPendingOperations()
+        .some((entry) => entry.id === summary.id),
+    ).toBe(true);
+  });
+});
+
+describe("transferring to a destination that does not exist", () => {
+  it("refuses before taking anything off the source", async () => {
+    const broker = new FakeBroker({ orders: ["a", "b", "c"] });
+    const backups = new JsonMessageBackupRepository(
+      new JsonSettingsStore({
+        configDir: mkdtempSync(join(tmpdir(), "rmq-xfer-")),
+        fileName: "backups",
+      }),
+    );
+    const queues = new QueueOperations(
+      broker,
+      new BackedUpOperationCoordinator(backups),
+    );
+
+    await expect(
+      broker.withConnection(testConnection, (open) =>
+        queues.safeRequeueMessages({
+          fromQueue: "orders",
+          toQueue: "retry-qeuue",
+          limit: 100,
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/does not exist/);
+
+    expect(broker.payloads("orders")).toEqual(["a", "b", "c"]);
+    expect(backups.listPendingOperations()).toHaveLength(0);
+  });
+
+  it("moves the messages when the destination is real", async () => {
+    const broker = new FakeBroker({ orders: ["a", "b"], retry: [] });
+    const backups = new JsonMessageBackupRepository(
+      new JsonSettingsStore({
+        configDir: mkdtempSync(join(tmpdir(), "rmq-xfer-")),
+        fileName: "backups",
+      }),
+    );
+    const queues = new QueueOperations(
+      broker,
+      new BackedUpOperationCoordinator(backups),
+    );
+
+    const summary = await broker.withConnection(testConnection, (open) =>
+      queues.safeRequeueMessages({
+        fromQueue: "orders",
+        toQueue: "retry",
+        limit: 100,
+        connection: open,
+      }),
+    );
+
+    expect(summary.successful).toBe(2);
+    expect(broker.payloads("retry")).toEqual(["a", "b"]);
+    expect(broker.payloads("orders")).toEqual([]);
   });
 });

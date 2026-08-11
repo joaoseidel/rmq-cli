@@ -5,18 +5,10 @@ import { theme } from "../../theme.ts";
 
 export interface HighlightProps {
   readonly text: string;
-  /** Search pattern; glob metacharacters are stripped before matching. */
   readonly pattern?: string;
   readonly dimmed?: boolean;
 }
 
-/**
- * Renders text with search hits tinted.
- *
- * Highlighting is applied at render time rather than by splicing ANSI codes into
- * the string, so the underlying value stays measurable — table column widths are
- * computed from the plain text, and `--json` output is unaffected.
- */
 function HighlightComponent({
   text,
   pattern = "",

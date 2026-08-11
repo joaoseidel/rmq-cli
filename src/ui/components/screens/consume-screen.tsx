@@ -6,19 +6,16 @@ import type { Queue } from "../../../core/domain/queue.ts";
 import type { BrokerClient } from "../../../core/ports/broker.ts";
 import type { QueueOperations } from "../../../core/usecase/queue-operations.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
-import { useKeyHandler } from "../../hooks/use-key-handler.ts";
+import { useScreenKeys } from "../../hooks/use-screen-keys.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { truncateToWidth } from "../../utils/width.ts";
 import { Spinner } from "../parts/spinner.tsx";
 import { StatusMessage } from "../parts/status-message.tsx";
 
-/** Delivered messages kept on screen. Older ones are dropped. */
 const BUFFER_SIZE = 500;
 
-/** RabbitMQ rejects a prefetch above this. */
 const PREFETCH = 100;
 
-/** How often buffered deliveries are painted. Faster than the eye needs. */
 const FLUSH_INTERVAL_MS = 100;
 
 type ConsumerStatus =
@@ -47,18 +44,6 @@ function timestamp(date: Date): string {
   return date.toTimeString().slice(0, 8);
 }
 
-/**
- * Live tail of a queue.
- *
- * Unlike every other screen, this one holds its broker connection open for as
- * long as it is mounted: a consumer only exists for the lifetime of its channel.
- * The `withConnection` block is parked on a promise that resolves when the
- * screen closes, which guarantees the consumer is cancelled and the channel shut
- * down on the way out.
- *
- * The buffer is capped because a busy queue would otherwise grow the render tree
- * without bound.
- */
 export function ConsumeScreen({
   broker,
   queues,
@@ -70,8 +55,7 @@ export function ConsumeScreen({
   isActive,
 }: ConsumeScreenProps) {
   const [entries, setEntries] = useState<Entry[]>([]);
-  // One union rather than a status plus a parallel error string: the pair could
-  // only ever be set together, and the type system could not see that.
+
   const [status, setStatus] = useState<ConsumerStatus>({ kind: "starting" });
   const [paused, setPaused] = useState(false);
 
@@ -79,10 +63,6 @@ export function ConsumeScreen({
   const pausedRef = useRef(false);
   pausedRef.current = paused;
 
-  // Deliveries land here and are flushed on a timer. A busy queue delivers far
-  // faster than the terminal can usefully repaint, and a setState per message
-  // would re-render (and re-measure every visible payload) thousands of times a
-  // second.
   const buffered = useRef<Entry[]>([]);
 
   useEffect(() => {
@@ -115,8 +95,7 @@ export function ConsumeScreen({
           connection: open,
           onMessage: (message) => {
             counter.current += 1;
-            // While paused the counter still advances, so the user can see how
-            // much traffic went by without the list moving under them.
+
             if (pausedRef.current) return;
 
             buffered.current.push({
@@ -142,17 +121,16 @@ export function ConsumeScreen({
     };
   }, [broker, queues, connection, queue.name, acknowledge]);
 
-  useKeyHandler(
-    (input) => {
-      if (input === " ") setPaused((value) => !value);
-      else if (input === "x") {
-        // Drop what is waiting to be painted too, or it reappears on the next flush.
+  useScreenKeys("consume", () => {}, {
+    isActive,
+    local: {
+      " ": () => setPaused((value) => !value),
+      x: () => {
         buffered.current = [];
         setEntries([]);
-      }
+      },
     },
-    { isActive },
-  );
+  });
 
   if (status.kind === "error") {
     return (
@@ -166,7 +144,6 @@ export function ConsumeScreen({
     );
   }
 
-  // Two lines per message, minus the status line.
   const visible = entries.slice(-Math.max(1, Math.floor((height - 1) / 2)));
 
   return (
@@ -184,8 +161,7 @@ export function ConsumeScreen({
           {glyphs.bullet}{" "}
           {acknowledge
             ? "acknowledging (messages are removed)"
-            : "peeking (messages stay queued)"}{" "}
-          {glyphs.bullet} space pause {glyphs.bullet} x clear
+            : "peeking (messages stay queued)"}
         </Text>
       )}
 

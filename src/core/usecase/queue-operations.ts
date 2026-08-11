@@ -25,6 +25,14 @@ export class QueueOperations {
     return this.broker.listQueues(pattern ?? null, connection);
   }
 
+  async queueExists(
+    name: string,
+    connection: BrokerConnection,
+  ): Promise<boolean> {
+    const queues = await this.broker.listQueues(null, connection);
+    return queues.some((queue) => queue.name === name);
+  }
+
   purgeQueue(
     queueName: string,
     connection: BrokerConnection,
@@ -43,13 +51,19 @@ export class QueueOperations {
     return this.broker.cancelConsumer(consumerTag, connection);
   }
 
-  safeRequeueMessages(input: {
+  async safeRequeueMessages(input: {
     fromQueue: string;
     toQueue: string;
     limit: number;
     connection: BrokerConnection;
   }): Promise<OperationSummary> {
     const { fromQueue, toQueue, limit, connection } = input;
+
+    if (!(await this.queueExists(toQueue, connection))) {
+      throw new Error(
+        `Queue '${toQueue}' does not exist. Nothing was taken from '${fromQueue}'.`,
+      );
+    }
 
     return this.coordinator.executeOperation({
       operationType: "requeue-messages",

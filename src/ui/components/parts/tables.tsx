@@ -8,14 +8,6 @@ import { truncateAroundPattern } from "../../../core/util/glob.ts";
 import { Highlight } from "./highlight.tsx";
 import { Table, fitCell, type Column } from "./table.tsx";
 
-/**
- * Table definitions for each domain type.
- *
- * Columns are declared once per type so every screen showing that type lays it
- * out identically. Where a cell highlights a search term, its `render` returns
- * text padded to exactly the width the layout assigned — see {@link fitCell}.
- */
-
 function queueColumns(pattern: string): Column<Queue>[] {
   return [
     {
@@ -55,16 +47,19 @@ export function QueueTable({
   width,
   pattern = "",
   selectedIndex,
+  isMarked,
 }: {
   readonly queues: readonly Queue[];
   readonly width: number;
   readonly pattern?: string;
   readonly selectedIndex?: number;
+  readonly isMarked?: (row: Queue) => boolean;
 }) {
   return (
     <Table
       columns={queueColumns(pattern)}
       rows={queues}
+      {...(isMarked === undefined ? {} : { isMarked })}
       maxWidth={width}
       selectedIndex={selectedIndex}
       rowKey={(queue) => `${queue.vhost}/${queue.name}`}
@@ -101,8 +96,7 @@ function messageColumns(pattern: string): Column<Message>[] {
     {
       key: "payload",
       header: "Payload",
-      // Long payloads are trimmed to the neighbourhood of the search hit, so the
-      // match is visible instead of being clipped off the right edge.
+
       value: (message) => truncateAroundPattern(message.payload, pattern, 24),
       flex: 4,
       minWidth: 10,
@@ -124,16 +118,19 @@ export function MessageTable({
   width,
   pattern = "",
   selectedIndex,
+  isMarked,
 }: {
   readonly messages: readonly Message[];
   readonly width: number;
   readonly pattern?: string;
   readonly selectedIndex?: number;
+  readonly isMarked?: (row: Message) => boolean;
 }) {
   return (
     <Table
       columns={messageColumns(pattern)}
       rows={messages}
+      {...(isMarked === undefined ? {} : { isMarked })}
       maxWidth={width}
       selectedIndex={selectedIndex}
       rowKey={(message) => message.id}
@@ -146,17 +143,14 @@ function searchHitColumns(pattern: string): Column<MessageSearchHit>[] {
     {
       key: "queue",
       header: "Queue",
-      // Natural width, never shrunk: which queue the hit came from is the
-      // answer the search exists to give, and a clipped queue name does not
-      // give it. The payload beside it absorbs the squeeze instead.
+
       value: (hit) => hit.queue,
       flex: 0,
     },
     {
       key: "payload",
       header: "Payload",
-      // The hit is the whole point of the row, so the payload is trimmed to its
-      // neighbourhood rather than to the first N characters.
+
       value: (hit) => truncateAroundPattern(hit.message.payload, pattern, 40),
       flex: 4,
       minWidth: 10,

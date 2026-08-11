@@ -5,19 +5,10 @@ import { Muted, Name, StatusMessage } from "./status-message.tsx";
 
 export interface OperationSummaryViewProps {
   readonly summary: OperationSummary;
-  /** Sentence describing what succeeded, e.g. "Requeued 3 messages to retry". */
   readonly successLabel: (count: number) => string;
   readonly failureLabel: (count: number) => string;
 }
 
-/**
- * Renders the outcome of a coordinated operation.
- *
- * The unrecovered-messages notice is the important part: when messages were
- * taken off the broker but not re-delivered, the only remaining copy is in the
- * backup file, so the operation id has to be surfaced prominently enough for the
- * user to act on it.
- */
 export function OperationSummaryView({
   summary,
   successLabel,
@@ -50,7 +41,7 @@ export function OperationSummaryView({
 
       {summary.successful === 0 && summary.failed === 0 ? (
         <StatusMessage tone="warning">
-          No messages matched — nothing to do.
+          No messages matched, so there was nothing to do.
         </StatusMessage>
       ) : null}
     </Box>

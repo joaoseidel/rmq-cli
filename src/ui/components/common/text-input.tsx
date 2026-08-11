@@ -10,21 +10,11 @@ export interface TextInputProps {
   readonly onCancel?: () => void;
   readonly placeholder?: string;
   readonly isActive?: boolean;
-  /** Renders every character as `*`. Used for password entry. */
   readonly mask?: boolean;
 }
 
 const CURSOR = "▏";
 
-/**
- * Single-line text field.
- *
- * Works controlled (pass `value` and `onChange`) or uncontrolled; the TUI filter
- * bar uses the former, one-off prompts the latter. Only printable input is
- * accepted — modifier chords reach `useInput` as ordinary characters, and
- * without this guard `Ctrl+C` would type a `c` into the field before the app
- * had a chance to exit.
- */
 function TextInputComponent({
   value,
   onChange,
@@ -64,7 +54,6 @@ function TextInputComponent({
         return;
       }
 
-      // Ignore control chords and non-printable input.
       if (key.ctrl || key.meta || input === "") return;
       if (/[\u0000-\u001f\u007f]/.test(input)) return;
 

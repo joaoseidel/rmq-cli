@@ -50,7 +50,6 @@ describe("FileKeySecretCipher", () => {
   it("rejects a tampered ciphertext", () => {
     const cipher = new FileKeySecretCipher(dir);
 
-    // "rmqenc.v1.<iv>.<tag>.<ciphertext>" — flip a bit in the payload.
     const parts = cipher.encrypt("hunter2").split(".");
     const payload = Buffer.from(parts[4] ?? "", "base64");
     payload.writeUInt8(payload.readUInt8(0) ^ 0xff, 0);
@@ -60,7 +59,9 @@ describe("FileKeySecretCipher", () => {
   });
 
   it("rejects a malformed ciphertext", () => {
-    expect(new FileKeySecretCipher(dir).decrypt("rmqenc.v1.nonsense")).toBeNull();
+    expect(
+      new FileKeySecretCipher(dir).decrypt("rmqenc.v1.nonsense"),
+    ).toBeNull();
   });
 
   it("fails loudly rather than replacing a corrupt key", () => {

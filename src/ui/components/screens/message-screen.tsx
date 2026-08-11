@@ -15,9 +15,8 @@ export interface MessageScreenProps {
   readonly isActive: boolean;
 }
 
-/** Rows the metadata block occupies, so the payload window can use the rest. */
 function metadataHeight(message: Message, verbose: boolean): number {
-  const base = 4; // id, transport, exchange, routing key
+  const base = 4;
   if (!verbose) return base + 2;
 
   const headers = Object.keys(message.headers).length;
@@ -30,13 +29,6 @@ function metadataHeight(message: Message, verbose: boolean): number {
   );
 }
 
-/**
- * Full detail for one message.
- *
- * The payload routinely exceeds the terminal height, so it is windowed by line
- * and scrolled with the same keys as every other list. Metadata can be collapsed
- * with `m` to give the payload the whole screen.
- */
 export function MessageScreen({
   message,
   onAction,
@@ -47,7 +39,6 @@ export function MessageScreen({
   const [offset, setOffset] = useState(0);
   const [showMetadata, setShowMetadata] = useState(true);
 
-  // Formatted once per message rather than twice per keystroke.
   const payloadLines = useMemo(
     () => formatPayloadLines(message.payload),
     [message.payload],
@@ -60,8 +51,6 @@ export function MessageScreen({
   const maxOffset = Math.max(0, totalLines - windowHeight);
   const clipped = totalLines > windowHeight;
 
-  // Payload scrolling. The action keys (d/M/R) come from the shared table, so
-  // they stay identical to the ones the queue list binds.
   useKeyHandler(
     (input, key) => {
       if (key.downArrow || input === "j")
@@ -95,8 +84,8 @@ export function MessageScreen({
 
       <Text color={theme.muted}>
         {clipped
-          ? `${glyphs.bullet} lines ${offset + 1}–${Math.min(offset + windowHeight, totalLines)} of ${totalLines} ${glyphs.bullet} j/k scroll ${glyphs.bullet} m metadata`
-          : `${glyphs.bullet} m metadata ${glyphs.bullet} d delete ${glyphs.bullet} M move ${glyphs.bullet} R reprocess`}
+          ? `${glyphs.bullet} lines ${offset + 1}–${Math.min(offset + windowHeight, totalLines)} of ${totalLines}`
+          : `${glyphs.bullet} whole payload shown`}
       </Text>
     </Box>
   );

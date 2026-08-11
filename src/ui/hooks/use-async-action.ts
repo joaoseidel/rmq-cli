@@ -9,18 +9,9 @@ export type ActionState<T> =
 
 export interface AsyncAction<T, A extends unknown[]> {
   readonly state: ActionState<T>;
-  /** Starts the action. Ignored while a previous run is still in flight. */
   readonly run: (...args: A) => void;
 }
 
-/**
- * An async operation triggered by the user rather than by mounting.
- *
- * The counterpart to {@link useAsync}: purges, deletes, and requeues must not
- * start until a confirmation has been answered. Concurrent runs are refused
- * outright — for destructive operations, coalescing a double keypress into one
- * execution is the only safe behaviour.
- */
 export function useAsyncAction<T, A extends unknown[] = []>(
   action: (...args: A) => Promise<T>,
 ): AsyncAction<T, A> {
@@ -50,14 +41,6 @@ export function useAsyncAction<T, A extends unknown[] = []>(
   return { state, run };
 }
 
-/**
- * Runs `onSuccess` once, after an action has succeeded.
- *
- * Every action screen ends by navigating or reporting, and each had written out
- * the same "derive the datum, then fire it from an effect" pair. It has to be an
- * effect rather than a branch in the render: the callbacks navigate, and moving
- * the stack during render would update the app mid-paint.
- */
 export function useActionResult<T>(
   state: ActionState<T>,
   onSuccess: (data: T) => void,

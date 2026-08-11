@@ -7,12 +7,13 @@ import { ALL_MESSAGES } from "../../../core/usecase/message-operations.ts";
 import type { QueueOperations } from "../../../core/usecase/queue-operations.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import { useAsyncAction } from "../../hooks/use-async-action.ts";
+import { useQueueNames } from "../../hooks/use-queue-names.ts";
 import { theme } from "../../theme.ts";
 import { Confirm } from "../common/confirm.tsx";
 import {
   Form,
+  mustBeKnown,
   positiveInteger,
-  required,
   type FormField,
 } from "../common/form.tsx";
 import { OperationSummaryView } from "../parts/operation-summary-view.tsx";
@@ -35,23 +36,26 @@ interface Plan {
   readonly limit: number;
 }
 
-function buildFields(fromQueue: string | undefined): FormField[] {
+function buildFields(
+  fromQueue: string | undefined,
+  queueNames: readonly string[],
+): FormField[] {
   return [
     {
       name: "from",
       label: "From queue",
       initialValue: fromQueue ?? "",
-      validate: required("Source queue"),
+      suggestions: queueNames,
+      validate: mustBeKnown("Source queue", queueNames),
     },
     {
       name: "to",
       label: "To queue",
+      suggestions: queueNames,
       validate: (value, values) => {
-        if (value.trim() === "") return "Destination queue is required.";
-        // Moving a queue onto itself would drain and republish in a loop.
         if (value === values["from"])
           return "Source and destination must differ.";
-        return null;
+        return mustBeKnown("Destination queue", queueNames)(value);
       },
     },
     {
@@ -73,13 +77,6 @@ function buildFields(fromQueue: string | undefined): FormField[] {
   ];
 }
 
-/**
- * Moves messages between queues.
- *
- * Destructive, so it confirms before running and reports through the shared
- * summary view — including the operation id needed to recover anything that was
- * taken off the source but could not be delivered to the target.
- */
 export function TransferScreen({
   broker,
   queues,
@@ -90,6 +87,7 @@ export function TransferScreen({
   isActive,
 }: TransferScreenProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
+  const queueNames = useQueueNames(broker, connection);
 
   const transfer = useAsyncAction(
     async (target: Plan): Promise<OperationSummary> =>
@@ -169,7 +167,7 @@ export function TransferScreen({
       ) : null}
 
       <Form
-        fields={buildFields(fromQueue)}
+        fields={buildFields(fromQueue, queueNames)}
         isActive={isActive}
         submitLabel="review"
         onCancel={onCancel}

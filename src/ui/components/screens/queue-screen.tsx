@@ -1,10 +1,12 @@
 import { Box, Text } from "ink";
 import type { Message } from "../../../core/domain/message.ts";
+import { searchableText } from "../../../core/usecase/message-operations.ts";
 import type { Queue } from "../../../core/domain/queue.ts";
-import { errorMessage } from "../../../core/util/text.ts";
+import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import type { ActionId } from "../../actions.ts";
 import { useAsync } from "../../hooks/use-async.ts";
 import { useFilterableList } from "../../hooks/use-filterable-list.ts";
+import type { ListMemory } from "../../hooks/use-list-memory.ts";
 import { useScreenKeys } from "../../hooks/use-screen-keys.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { FilterBar } from "../parts/filter-bar.tsx";
@@ -18,11 +20,8 @@ export interface QueueScreenProps {
   readonly onOpen: (message: Message) => void;
   readonly onSelectionChange: (message: Message | null) => void;
   readonly onAction: (id: ActionId) => void;
-  /**
-   * Set by the palette's Filter action. The screen opens its filter field and
-   * calls `onFilterOpened` to clear the request — a plain counter would not
-   * survive the remount caused by the palette closing.
-   */
+  readonly onMarkedChange: (messages: readonly Message[]) => void;
+  readonly memory: ListMemory;
   readonly openFilter: boolean;
   readonly onFilterOpened: () => void;
   readonly width: number;
@@ -30,21 +29,17 @@ export interface QueueScreenProps {
   readonly isActive: boolean;
 }
 
-const searchableFields = (message: Message) => [message.payload, message.id];
+const searchableFields = searchableText;
+const messageKey = (message: Message) => message.id;
 
-/**
- * Message browser for one queue.
- *
- * Messages are fetched without acknowledgement, so browsing never consumes:
- * everything shown here is still on the broker when the screen closes. That is
- * what makes it safe to page through a production queue.
- */
 export function QueueScreen({
   queue,
   loadMessages,
   onOpen,
   onSelectionChange,
   onAction,
+  onMarkedChange,
+  memory,
   openFilter,
   onFilterOpened,
   width,
@@ -67,11 +62,19 @@ export function QueueScreen({
     openFilter,
     onFilterOpened,
     clearSelectionOnUnmount: true,
+    onMarkedChange,
+    memory,
+    memoryKey: `queue:${queue.name}`,
+    key: messageKey,
   });
 
   useScreenKeys("queue", onAction, {
     isActive: isActive && !list.filtering,
-    local: { "/": list.startFiltering },
+    local: {
+      "/": list.startFiltering,
+      " ": list.toggleMark,
+      a: list.toggleMarkAll,
+    },
   });
 
   if (state.status === "pending")
@@ -100,10 +103,14 @@ export function QueueScreen({
             width={width}
             pattern={list.filter}
             selectedIndex={list.selectedIndex - start}
+            isMarked={list.isMarked}
           />
           <Text color={theme.muted}>
-            {list.selectedIndex + 1}/{list.visible.length} {glyphs.bullet}{" "}
-            previewed, not consumed
+            {list.selectedIndex + 1}/{list.visible.length}
+            {list.marked.length === 0
+              ? ""
+              : ` ${glyphs.bullet} ${formatCount(list.marked.length, "message")} marked`}{" "}
+            {glyphs.bullet} previewed, not consumed
           </Text>
         </>
       )}

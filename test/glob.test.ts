@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { globMatches, removeGlob, splitOnMatch, toGlobRegex, truncateAroundPattern } from "../src/core/util/glob.ts";
+import {
+  globMatches,
+  removeGlob,
+  splitOnMatch,
+  toGlobRegex,
+  truncateAroundPattern,
+} from "../src/core/util/glob.ts";
 
 describe("toGlobRegex", () => {
   it("expands * to match any run of characters", () => {
@@ -12,7 +18,6 @@ describe("toGlobRegex", () => {
   });
 
   it("escapes literal dots", () => {
-    // Without escaping, "app.error" would also match "appXerror".
     expect(toGlobRegex("app.error").test("appXerror")).toBe(false);
     expect(toGlobRegex("app.error").test("app.error")).toBe(true);
   });
@@ -76,7 +81,6 @@ describe("splitOnMatch", () => {
   });
 
   it("treats regex metacharacters literally", () => {
-    // The needle comes from user input, so it must not be compiled as a pattern.
     expect(splitOnMatch("a.c", ".")).toEqual([
       { text: "a", match: false },
       { text: ".", match: true },

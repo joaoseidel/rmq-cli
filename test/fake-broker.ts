@@ -1,9 +1,16 @@
 import type { ConnectionInfo } from "../src/core/domain/connection.ts";
-import { createMessageId, type CompositeMessageId } from "../src/core/domain/message-id.ts";
+import {
+  createMessageId,
+  type CompositeMessageId,
+} from "../src/core/domain/message-id.ts";
 import type { Message } from "../src/core/domain/message.ts";
 import type { Queue } from "../src/core/domain/queue.ts";
 import type { VHost } from "../src/core/domain/vhost.ts";
-import type { BrokerClient, BrokerConnection, PurgeResult } from "../src/core/ports/broker.ts";
+import type {
+  BrokerClient,
+  BrokerConnection,
+  PurgeResult,
+} from "../src/core/ports/broker.ts";
 import { ConnectionInfoSchema } from "../src/core/domain/connection.ts";
 import { vHost } from "../src/core/domain/vhost.ts";
 
@@ -18,22 +25,14 @@ export const testConnection: ConnectionInfo = ConnectionInfoSchema.parse({
   isDefault: true,
 });
 
-/**
- * An in-memory broker.
- *
- * Models the one property that makes queue surgery dangerous: `getMessages` with
- * `ack` genuinely removes messages, so any code that drains a queue and fails to
- * put messages back loses them here exactly as it would in production.
- */
 export class FakeBroker implements BrokerClient {
   readonly queues = new Map<string, string[]>();
-  /** Queue names for which publishing fails, to exercise the recovery paths. */
   readonly rejectPublishTo = new Set<string>();
-  /** Queue names whose reads throw, standing in for a queue deleted mid-scan. */
   readonly rejectReadsFrom = new Set<string>();
 
   constructor(seed: Record<string, string[]> = {}) {
-    for (const [name, payloads] of Object.entries(seed)) this.queues.set(name, [...payloads]);
+    for (const [name, payloads] of Object.entries(seed))
+      this.queues.set(name, [...payloads]);
   }
 
   private contents(name: string): string[] {
@@ -45,7 +44,11 @@ export class FakeBroker implements BrokerClient {
     return created;
   }
 
-  private toMessage(queueName: string, payload: string, index: number): Message {
+  private toMessage(
+    queueName: string,
+    payload: string,
+    index: number,
+  ): Message {
     return {
       transport: "amqp",
       id: createMessageId({
@@ -75,13 +78,24 @@ export class FakeBroker implements BrokerClient {
     return true;
   }
 
-  async publishMessage(input: { routingKey: string; payload: string }): Promise<boolean> {
+  async publishMessage(input: {
+    routingKey: string;
+    payload: string;
+  }): Promise<boolean> {
     if (this.rejectPublishTo.has(input.routingKey)) return false;
-    this.contents(input.routingKey).push(input.payload);
+
+    const queue = this.queues.get(input.routingKey);
+    if (queue === undefined) return false;
+
+    queue.push(input.payload);
     return true;
   }
 
-  async getMessages(input: { queueName: string; count: number; ack?: boolean }): Promise<Message[]> {
+  async getMessages(input: {
+    queueName: string;
+    count: number;
+    ack?: boolean;
+  }): Promise<Message[]> {
     if (this.rejectReadsFrom.has(input.queueName)) {
       throw new Error(`NOT_FOUND - no queue '${input.queueName}'`);
     }
@@ -91,7 +105,9 @@ export class FakeBroker implements BrokerClient {
 
     if (input.ack === true) queue.splice(0, taken.length);
 
-    return taken.map((payload, index) => this.toMessage(input.queueName, payload, index));
+    return taken.map((payload, index) =>
+      this.toMessage(input.queueName, payload, index),
+    );
   }
 
   async purgeQueue(queueName: string): Promise<PurgeResult> {
@@ -103,7 +119,10 @@ export class FakeBroker implements BrokerClient {
 
   async listQueues(pattern: string | null): Promise<Queue[]> {
     return [...this.queues.entries()]
-      .filter(([name]) => pattern === null || name.includes(pattern.replaceAll("*", "")))
+      .filter(
+        ([name]) =>
+          pattern === null || name.includes(pattern.replaceAll("*", "")),
+      )
       .map(([name, payloads]) => ({
         name,
         vhost: "/",
@@ -124,12 +143,21 @@ export class FakeBroker implements BrokerClient {
     return true;
   }
 
-  async findMessage(input: { id: CompositeMessageId; queueName: string }): Promise<Message | null> {
-    const messages = await this.getMessages({ queueName: input.queueName, count: Number.MAX_SAFE_INTEGER });
+  async findMessage(input: {
+    id: CompositeMessageId;
+    queueName: string;
+  }): Promise<Message | null> {
+    const messages = await this.getMessages({
+      queueName: input.queueName,
+      count: Number.MAX_SAFE_INTEGER,
+    });
     return messages.find((message) => message.id === input.id) ?? null;
   }
 
-  async withConnection<T>(info: ConnectionInfo, block: (connection: BrokerConnection) => Promise<T>): Promise<T> {
+  async withConnection<T>(
+    info: ConnectionInfo,
+    block: (connection: BrokerConnection) => Promise<T>,
+  ): Promise<T> {
     return block(await this.connect(info));
   }
 }
