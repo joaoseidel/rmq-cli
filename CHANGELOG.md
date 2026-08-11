@@ -1,3 +1,24 @@
+# [2.0.0](https://github.com/joaoseidel/rmq-cli/compare/v1.6.0...v2.0.0) (2026-08-11)
+
+
+* feat!: rewrite CLI as TypeScript/Ink fullscreen TUI ([a85619f](https://github.com/joaoseidel/rmq-cli/commit/a85619f78aca37794397c2c915f17f001b70775c))
+
+
+### BREAKING CHANGES
+
+* the Kotlin/Gradle implementation and its native-image
+distribution are removed. rmq is now a Node.js package published to npm
+(rmq-cli plus the @joaoseidel/rmq alias) and runs as a fullscreen
+terminal UI instead of a subcommand-based CLI.
+
+- port core domain, ports and use cases (connections, queues, messages,
+  vhosts) to TypeScript with AMQP + management API adapters
+- add Ink UI layer: screens, shared hooks, unified keymap and router
+- store config under ~/.rmq-cli with encrypted connection secrets
+- replace Gradle/GraalVM workflows with pnpm-based CI and semantic-release
+  npm publishing, plus an alias version-sync script
+- add vitest suite covering operations, storage, cipher and UI rendering
+
 # [1.6.0](https://github.com/joaoseidel/rmq-cli/compare/v1.5.0...v1.6.0) (2025-10-01)
 
 
