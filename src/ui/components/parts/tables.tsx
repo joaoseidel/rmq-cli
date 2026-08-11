@@ -3,6 +3,7 @@ import type { ConnectionInfo } from "../../../core/domain/connection.ts";
 import { portSummary } from "../../../core/domain/connection.ts";
 import { displayExchange, type Message } from "../../../core/domain/message.ts";
 import type { Queue } from "../../../core/domain/queue.ts";
+import type { MessageSearchHit } from "../../../core/usecase/message-operations.ts";
 import { truncateAroundPattern } from "../../../core/util/glob.ts";
 import { Highlight } from "./highlight.tsx";
 import { Table, fitCell, type Column } from "./table.tsx";
@@ -136,6 +137,60 @@ export function MessageTable({
       maxWidth={width}
       selectedIndex={selectedIndex}
       rowKey={(message) => message.id}
+    />
+  );
+}
+
+function searchHitColumns(pattern: string): Column<MessageSearchHit>[] {
+  return [
+    {
+      key: "queue",
+      header: "Queue",
+      // Natural width, never shrunk: which queue the hit came from is the
+      // answer the search exists to give, and a clipped queue name does not
+      // give it. The payload beside it absorbs the squeeze instead.
+      value: (hit) => hit.queue,
+      flex: 0,
+    },
+    {
+      key: "payload",
+      header: "Payload",
+      // The hit is the whole point of the row, so the payload is trimmed to its
+      // neighbourhood rather than to the first N characters.
+      value: (hit) => truncateAroundPattern(hit.message.payload, pattern, 40),
+      flex: 4,
+      minWidth: 10,
+      render: (hit, width) => (
+        <Highlight
+          text={fitCell(
+            truncateAroundPattern(hit.message.payload, pattern, 40),
+            width,
+          )}
+          pattern={pattern}
+        />
+      ),
+    },
+  ];
+}
+
+export function SearchHitTable({
+  hits,
+  width,
+  pattern = "",
+  selectedIndex,
+}: {
+  readonly hits: readonly MessageSearchHit[];
+  readonly width: number;
+  readonly pattern?: string;
+  readonly selectedIndex?: number;
+}) {
+  return (
+    <Table
+      columns={searchHitColumns(pattern)}
+      rows={hits}
+      maxWidth={width}
+      selectedIndex={selectedIndex}
+      rowKey={(hit) => `${hit.queue}/${hit.message.id}`}
     />
   );
 }

@@ -126,6 +126,21 @@ function AppContent({ container }: AppProps) {
     selectionRef.current = { ...selectionRef.current, message };
   }, []);
 
+  // The queue browser's filtered set, held for the cross-queue search. A ref for
+  // the same reason as the selection: it changes on every keystroke of the
+  // filter, and re-rendering the app for that would make typing feel sticky.
+  const queueScopeRef = useRef<{
+    queues: readonly Queue[];
+    filter: string;
+  }>({ queues: [], filter: "" });
+
+  const setQueueScope = useCallback(
+    (queues: readonly Queue[], filter: string) => {
+      queueScopeRef.current = { queues, filter };
+    },
+    [],
+  );
+
   const refresh = useCallback(() => setReloadToken((value) => value + 1), []);
   const clearFilterRequest = useCallback(() => setFilterRequested(false), []);
 
@@ -315,6 +330,15 @@ function AppContent({ container }: AppProps) {
         case "help":
           stack.push({ name: "help" });
           break;
+        case "search-messages": {
+          const { queues: scope, filter } = queueScopeRef.current;
+          if (scope.length === 0) {
+            announce("No queues to search.", "danger");
+            break;
+          }
+          stack.push({ name: "search", queues: scope, scope: filter });
+          break;
+        }
         case "filter":
           // The list screens own their filter field; bump a token they watch.
           if (screen.name === "queues" || screen.name === "queue")
@@ -437,6 +461,7 @@ function AppContent({ container }: AppProps) {
     },
     onQueueSelectionChange: setQueueSelection,
     onMessageSelectionChange: setMessageSelection,
+    onQueueScopeChange: setQueueScope,
     filterRequested,
     onFilterOpened: clearFilterRequest,
   };

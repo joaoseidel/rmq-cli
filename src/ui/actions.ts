@@ -6,6 +6,7 @@ export const ACTION_IDS = [
   "queues",
   "refresh",
   "filter",
+  "search-messages",
   "open",
   "purge",
   "consume",
@@ -49,7 +50,7 @@ const SPECS: Record<ActionId, ActionSpec> = {
   queues: {
     label: "Go to queues",
     hint: "back to the queue list",
-    from: ["queue", "message", "connections", "vhosts", "help"],
+    from: ["queue", "message", "search", "connections", "vhosts", "help"],
   },
   refresh: {
     label: "Refresh",
@@ -60,6 +61,11 @@ const SPECS: Record<ActionId, ActionSpec> = {
     label: "Filter",
     hint: "narrow the list by name or payload",
     from: ["queues", "queue"],
+  },
+  "search-messages": {
+    label: "Search messages",
+    hint: "find a payload across every queue the filter leaves",
+    from: ["queues"],
   },
   open: {
     label: "Open",
@@ -123,7 +129,7 @@ const SPECS: Record<ActionId, ActionSpec> = {
   connections: {
     label: "Connections",
     hint: "switch, add, or remove brokers",
-    from: ["queues", "queue", "message", "vhosts", "help"],
+    from: ["queues", "queue", "message", "search", "vhosts", "help"],
   },
   "add-connection": {
     label: "Add connection",
@@ -138,12 +144,20 @@ const SPECS: Record<ActionId, ActionSpec> = {
   help: {
     label: "Help",
     hint: "key reference",
-    from: ["queues", "queue", "message", "connections", "vhosts"],
+    from: ["queues", "queue", "message", "search", "connections", "vhosts"],
   },
   quit: {
     label: "Quit",
     hint: "leave rmq",
-    from: ["queues", "queue", "message", "connections", "vhosts", "help"],
+    from: [
+      "queues",
+      "queue",
+      "message",
+      "search",
+      "connections",
+      "vhosts",
+      "help",
+    ],
   },
 };
 

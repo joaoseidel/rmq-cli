@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import { useEffect } from "react";
 import type { Queue } from "../../../core/domain/queue.ts";
 import { totalMessages } from "../../../core/domain/queue.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
@@ -17,6 +18,12 @@ export interface QueuesScreenProps {
   readonly onOpen: (queue: Queue) => void;
   /** Publishes the highlighted row so the app can act on it. */
   readonly onSelectionChange: (queue: Queue | null) => void;
+  /**
+   * Publishes the filtered set, which is what a cross-queue search runs over.
+   * Separate from the selection: the search acts on every row the filter left,
+   * not on the one under the cursor.
+   */
+  readonly onScopeChange: (queues: readonly Queue[], filter: string) => void;
   readonly onAction: (id: ActionId) => void;
   /**
    * Set by the palette's Filter action. The screen opens its filter field and
@@ -47,6 +54,7 @@ export function QueuesScreen({
   loadQueues,
   onOpen,
   onSelectionChange,
+  onScopeChange,
   onAction,
   openFilter,
   onFilterOpened,
@@ -69,6 +77,10 @@ export function QueuesScreen({
     openFilter,
     onFilterOpened,
   });
+
+  useEffect(() => {
+    onScopeChange(list.visible, list.filter);
+  }, [list.visible, list.filter, onScopeChange]);
 
   useScreenKeys("queues", onAction, {
     isActive: isActive && !list.filtering,

@@ -61,6 +61,12 @@ const SCREEN_SECTIONS: readonly Section[] = [
       .filter((b) => b.displayOnly !== true)
       .map(describe),
   },
+  {
+    title: "Search results",
+    bindings: bindingsFor("search")
+      .filter((b) => b.displayOnly !== true)
+      .map(describe),
+  },
   { title: "Message view", bindings: bindingsFor("message").map(describe) },
 ];
 

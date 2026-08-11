@@ -21,7 +21,7 @@ filter: order (3 matching)
 └──────────────────────────────┴───────┴───────┴─────────┘
 1/3 • 1042 messages in order-processing
 ────────────────────────────────────────────────────────────────────────────────
-↑↓ move  ⏎ open  / filter  r refresh  p purge  t tail  : actions  ? help  q quit
+↑↓ move  ⏎ open  / filter  s search  r refresh  p purge  t tail  : actions  ? help  q quit
 ```
 
 ## Why
@@ -98,15 +98,20 @@ which is searchable and shows everything available from the current screen.
 | `↑ ↓` / `j k` | move the cursor                                          |
 | `⏎`           | open the selected queue or message                       |
 | `/`           | filter the current list; `⏎` applies, `esc` clears       |
+| `s`           | search messages across every filtered queue at once      |
 | `r`           | re-read from the broker                                  |
 | `esc`         | back one screen                                          |
 | `q`           | back, or quit from the queue list                        |
 
-On the queue list: `p` purge, `t` live tail, `e` export, `i` import, `w`
-publish, `m` move messages, `c` connections, `v` virtual hosts.
+On the queue list: `s` search across the filtered queues, `p` purge, `t` live
+tail, `e` export, `i` import, `w` publish, `m` move messages, `c` connections,
+`v` virtual hosts.
 
 On a queue or an open message: `d` delete, `M` move it to another queue, `R`
 reprocess it to its original exchange.
+
+On search results: `+` / `-` search deeper or shallower, `r` re-run the same
+search, `/` start a new one.
 
 ## What it does
 
@@ -115,6 +120,37 @@ reprocess it to its original exchange.
 **Messages** — page through a queue without consuming anything, read payloads
 with JSON pretty-printed, filter by content, delete, move to another queue, or
 reprocess to the original exchange.
+
+**Search** — `/` narrows the queue list to the queues worth looking in; `s` then
+searches all of them at once for a payload or a message id. Results stream in
+queue by queue, showing which queue each hit came from, and `⏎` opens the hit
+where every message action is already available.
+
+```
+rmq • Search 3 queues • prod • /                                        1 deep
+────────────────────────────────────────────────────────────────────────────────
+search: AB-991 (3 matching)
+3 queues matching 'order' • up to 200 messages each, never consumed
+┌──────────────────┬───────────────────────────────────────────────────────────┐
+│ Queue            │ Payload                                                   │
+├──────────────────┼───────────────────────────────────────────────────────────┤
+│ order-processing │ {"id":1,"ref":"AB-991","customer":"acme-corp"...           │
+│ order-failed     │ {"id":4,"ref":"AB-991","customer":"acme-corp"...           │
+│ order-dlq        │ {"id":6,"ref":"AB-991","customer":"acme-corp"...           │
+└──────────────────┴───────────────────────────────────────────────────────────┘
+1/3 • 00000000000000010b93892c7068a865163b06d7
+3 queues searched • 6 messages peeked • 3 messages matching
+```
+
+The search reads at most 200 messages per queue and says so. When a queue fills
+that cap the screen names it, because a search that stopped short is not
+evidence the message was never there — and `+` re-runs deeper (100, 200, 500,
+1000, 5000, 10000), `-` shallower. Queues that cannot be read are reported
+individually and the rest are searched anyway.
+
+```
+! 1 queue hit the 200-message cap (order-dlq) — press + to search deeper
+```
 
 **Publishing** — send to a queue or to an exchange with a routing key, with the
 body typed inline or read from a file.

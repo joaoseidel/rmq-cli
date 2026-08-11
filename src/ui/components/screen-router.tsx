@@ -14,6 +14,7 @@ import { MoveMessageScreen } from "./screens/move-message-screen.tsx";
 import { PublishScreen } from "./screens/publish-screen.tsx";
 import { QueueScreen } from "./screens/queue-screen.tsx";
 import { QueuesScreen } from "./screens/queues-screen.tsx";
+import { SearchScreen } from "./screens/search-screen.tsx";
 import { TransferFileScreen } from "./screens/transfer-file-screen.tsx";
 import { TransferScreen } from "./screens/transfer-screen.tsx";
 import { VHostsScreen } from "./screens/vhosts-screen.tsx";
@@ -49,6 +50,11 @@ export interface ScreenContext {
   readonly switchVHost: (vhost: VHost) => void;
   readonly onQueueSelectionChange: (queue: Queue | null) => void;
   readonly onMessageSelectionChange: (message: Message | null) => void;
+  /** The queue browser's current filtered set — the scope a search runs over. */
+  readonly onQueueScopeChange: (
+    queues: readonly Queue[],
+    filter: string,
+  ) => void;
 
   /** Set by the palette's Filter action; cleared by the screen that opens it. */
   readonly filterRequested: boolean;
@@ -71,6 +77,7 @@ export function ScreenRouter({ screen, ctx }: { readonly screen: Screen; readonl
           openFilter={ctx.filterRequested}
           onFilterOpened={ctx.onFilterOpened}
           onSelectionChange={ctx.onQueueSelectionChange}
+          onScopeChange={ctx.onQueueScopeChange}
           onOpen={(queue) => ctx.push({ name: "queue", queue })}
           onAction={ctx.runAction}
           width={ctx.width}
@@ -88,6 +95,22 @@ export function ScreenRouter({ screen, ctx }: { readonly screen: Screen; readonl
           onFilterOpened={ctx.onFilterOpened}
           onSelectionChange={ctx.onMessageSelectionChange}
           onOpen={(message) => ctx.push({ name: "message", queue: screen.queue, message })}
+          onAction={ctx.runAction}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+        />
+      );
+
+    case "search":
+      return (
+        <SearchScreen
+          broker={ctx.container.broker}
+          messages={ctx.container.messages}
+          connection={ctx.connection}
+          queues={screen.queues}
+          scope={screen.scope}
+          onOpen={(queue, message) => ctx.push({ name: "message", queue, message })}
           onAction={ctx.runAction}
           width={ctx.width}
           height={ctx.height}

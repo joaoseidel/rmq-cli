@@ -36,6 +36,13 @@ export const SCREEN_KEYS = {
     { key: "↑↓", label: "move", displayOnly: true },
     { key: "⏎", label: "open", displayOnly: true },
     { key: "/", label: "filter", description: "filter the list", primary: true },
+    {
+      key: "s",
+      label: "search",
+      description: "search messages across the filtered queues",
+      action: "search-messages",
+      primary: true,
+    },
     { key: "r", label: "refresh", description: "re-read from the broker", action: "refresh", primary: true },
     { key: "p", label: "purge", description: "purge the queue", action: "purge", primary: true },
     { key: "t", label: "tail", description: "live tail (AMQP only)", action: "consume", primary: true },
@@ -64,6 +71,14 @@ export const SCREEN_KEYS = {
     { key: "e", label: "export", description: "export to JSON", action: "export" },
     { key: "w", label: "publish", description: "publish a message", action: "publish" },
     { key: "p", label: "purge", description: "purge the queue", action: "purge" },
+  ],
+  search: [
+    { key: "↑↓", label: "move", displayOnly: true },
+    { key: "⏎", label: "open", displayOnly: true },
+    { key: "/", label: "new search", description: "search for another term", primary: true },
+    { key: "+", label: "deeper", description: "peek further into each queue", primary: true },
+    { key: "-", label: "shallower", description: "peek less far into each queue" },
+    { key: "r", label: "rerun", description: "run the same search again", primary: true },
   ],
   message: [
     { key: "j/k", label: "scroll", description: "scroll the payload", displayOnly: true },

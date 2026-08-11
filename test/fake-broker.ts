@@ -29,6 +29,8 @@ export class FakeBroker implements BrokerClient {
   readonly queues = new Map<string, string[]>();
   /** Queue names for which publishing fails, to exercise the recovery paths. */
   readonly rejectPublishTo = new Set<string>();
+  /** Queue names whose reads throw, standing in for a queue deleted mid-scan. */
+  readonly rejectReadsFrom = new Set<string>();
 
   constructor(seed: Record<string, string[]> = {}) {
     for (const [name, payloads] of Object.entries(seed)) this.queues.set(name, [...payloads]);
@@ -80,6 +82,10 @@ export class FakeBroker implements BrokerClient {
   }
 
   async getMessages(input: { queueName: string; count: number; ack?: boolean }): Promise<Message[]> {
+    if (this.rejectReadsFrom.has(input.queueName)) {
+      throw new Error(`NOT_FOUND - no queue '${input.queueName}'`);
+    }
+
     const queue = this.contents(input.queueName);
     const taken = queue.slice(0, Math.min(input.count, queue.length));
 

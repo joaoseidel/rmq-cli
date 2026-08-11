@@ -23,6 +23,17 @@ export type Screen =
       /** "reprocess" republishes to the original exchange instead of a queue. */
       readonly mode: "move" | "reprocess";
     }
+  | {
+      readonly name: "search";
+      /**
+       * The queues to search, captured from the queue browser at the moment the
+       * search was opened. Held here rather than re-derived so the scope cannot
+       * shift under a running scan if the broker's queue list changes.
+       */
+      readonly queues: readonly Queue[];
+      /** The queue filter that produced the scope, for the header. */
+      readonly scope: string;
+    }
   | { readonly name: "consume"; readonly queue: Queue }
   | { readonly name: "publish"; readonly queue?: Queue }
   | { readonly name: "transfer"; readonly from?: Queue }
@@ -71,6 +82,8 @@ export function screenTitle(screen: Screen): string {
       return "Message";
     case "move-message":
       return screen.mode === "move" ? "Move message" : "Reprocess message";
+    case "search":
+      return `Search ${screen.queues.length === 1 ? "1 queue" : `${screen.queues.length} queues`}`;
     case "consume":
       return `Consume ${screen.queue.name}`;
     case "publish":

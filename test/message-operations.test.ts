@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { BackedUpOperationCoordinator } from "../src/adapters/storage/backed-up-operation-coordinator.ts";
 import { JsonMessageBackupRepository } from "../src/adapters/storage/json-message-backup-repository.ts";
 import { JsonSettingsStore } from "../src/adapters/storage/json-settings-store.ts";
-import { MessageOperations } from "../src/core/usecase/message-operations.ts";
+import {
+  DEFAULT_SEARCH_LIMIT,
+  MessageOperations,
+  SEARCH_DEPTHS,
+  stepSearchDepth,
+} from "../src/core/usecase/message-operations.ts";
 import type { BrokerConnection } from "../src/core/ports/broker.ts";
 import { FakeBroker, testConnection } from "./fake-broker.ts";
 
@@ -174,5 +179,181 @@ describe("reprocessing a message", () => {
     // The fake routes the default exchange straight back to the queue, so the
     // republished copy lands at the end and the original is gone.
     expect(broker.payloads("orders")).toEqual(["b", "a"]);
+  });
+});
+
+describe("searching for a message across queues", () => {
+  const seed = {
+    "order-processing": ['{"id":1,"ref":"AB-991"}', '{"id":2,"ref":"ZZ-100"}'],
+    "order-failed": ['{"id":3,"ref":"AB-991"}'],
+    "order-dlq": ['{"id":4,"ref":"QQ-777"}'],
+  };
+
+  it("returns every hit, tagged with the queue it came from", async () => {
+    const { broker, messages } = build(seed);
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["order-processing", "order-failed", "order-dlq"],
+        term: "AB-991",
+        connection: open,
+      }),
+    );
+
+    expect(outcome.hits.map((hit) => hit.queue)).toEqual(["order-processing", "order-failed"]);
+    expect(outcome.hits[0]!.message.payload).toContain("AB-991");
+    expect(outcome.queuesScanned).toBe(3);
+    expect(outcome.scanned).toBe(4);
+  });
+
+  it("leaves every queue it searched exactly as it found it", async () => {
+    const { broker, messages } = build(seed);
+
+    await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["order-processing", "order-failed", "order-dlq"],
+        term: "AB-991",
+        connection: open,
+      }),
+    );
+
+    // The whole point of a search: it is safe to run against production.
+    expect(broker.payloads("order-processing")).toEqual(seed["order-processing"]);
+    expect(broker.payloads("order-failed")).toEqual(seed["order-failed"]);
+    expect(broker.payloads("order-dlq")).toEqual(seed["order-dlq"]);
+  });
+
+  it("matches on message id as well as payload", async () => {
+    const { broker, messages } = build({ orders: ["a", "b"] });
+    const all = await withConnection(broker, (open) => messages.getMessages("orders", 10, false, open));
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.searchMessages({ queueNames: ["orders"], term: all[1]!.id, connection: open }),
+    );
+
+    expect(outcome.hits).toHaveLength(1);
+    expect(outcome.hits[0]!.message.id).toBe(all[1]!.id);
+  });
+
+  it("honours glob wildcards in the term", async () => {
+    const { broker, messages } = build(seed);
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["order-processing", "order-dlq"],
+        term: "ref*777",
+        connection: open,
+      }),
+    );
+
+    expect(outcome.hits).toHaveLength(1);
+    expect(outcome.hits[0]!.queue).toBe("order-dlq");
+  });
+
+  it("names the queues that filled the per-queue cap", async () => {
+    const { broker, messages } = build({ big: ["x", "x", "x"], small: ["x"] });
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["big", "small"],
+        term: "x",
+        limitPerQueue: 3,
+        connection: open,
+      }),
+    );
+
+    // 'big' filled the cap, so a miss there would not have proved absence.
+    expect(outcome.truncated).toEqual(["big"]);
+    expect(outcome.hits).toHaveLength(4);
+  });
+
+  it("records a queue it could not read and searches the rest anyway", async () => {
+    const { broker, messages } = build(seed);
+    broker.rejectReadsFrom.add("order-failed");
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["order-processing", "order-failed", "order-dlq"],
+        term: "ref",
+        connection: open,
+      }),
+    );
+
+    expect(outcome.failures).toHaveLength(1);
+    expect(outcome.failures[0]!.queue).toBe("order-failed");
+    // One unreadable queue must not cost the results from the other two.
+    expect(outcome.hits.map((hit) => hit.queue)).toEqual(["order-processing", "order-processing", "order-dlq"]);
+  });
+
+  it("reports partial results as each queue is finished", async () => {
+    const { broker, messages } = build(seed);
+    const progress: number[] = [];
+
+    await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["order-processing", "order-failed", "order-dlq"],
+        term: "AB-991",
+        connection: open,
+        onProgress: (outcome) => progress.push(outcome.hits.length),
+      }),
+    );
+
+    expect(progress).toEqual([1, 2, 2]);
+  });
+
+  it("stops where it is when cancelled, and says so", async () => {
+    const { broker, messages } = build(seed);
+    let visited = 0;
+
+    const outcome = await withConnection(broker, (open) =>
+      messages.searchMessages({
+        queueNames: ["order-processing", "order-failed", "order-dlq"],
+        term: "ref",
+        connection: open,
+        isCancelled: () => visited++ >= 1,
+      }),
+    );
+
+    expect(outcome.cancelled).toBe(true);
+    expect(outcome.queuesScanned).toBe(1);
+    expect(outcome.hits.map((hit) => hit.queue)).toEqual(["order-processing", "order-processing"]);
+  });
+});
+
+describe("choosing how deep a search goes", () => {
+  it("steps through the offered depths", () => {
+    expect(stepSearchDepth(200, "deeper")).toBe(500);
+    expect(stepSearchDepth(200, "shallower")).toBe(100);
+  });
+
+  it("clamps at both ends rather than wrapping", () => {
+    const shallowest = SEARCH_DEPTHS[0]!;
+    const deepest = SEARCH_DEPTHS[SEARCH_DEPTHS.length - 1]!;
+
+    // Wrapping would silently turn "search deeper" into the shallowest scan
+    // there is, which is the opposite of what the key was pressed for.
+    expect(stepSearchDepth(deepest, "deeper")).toBe(deepest);
+    expect(stepSearchDepth(shallowest, "shallower")).toBe(shallowest);
+  });
+
+  it("falls back to the default for a depth it does not offer", () => {
+    expect(stepSearchDepth(37, "deeper")).toBe(DEFAULT_SEARCH_LIMIT);
+  });
+
+  it("reaches messages a shallower run stopped short of", async () => {
+    const payloads = Array.from({ length: 250 }, (_, i) => (i === 240 ? "needle" : "hay"));
+    const { broker, messages } = build({ orders: payloads });
+
+    const shallow = await withConnection(broker, (open) =>
+      messages.searchMessages({ queueNames: ["orders"], term: "needle", limitPerQueue: 200, connection: open }),
+    );
+    expect(shallow.hits).toHaveLength(0);
+    expect(shallow.truncated).toEqual(["orders"]);
+
+    const deep = await withConnection(broker, (open) =>
+      messages.searchMessages({ queueNames: ["orders"], term: "needle", limitPerQueue: 500, connection: open }),
+    );
+    expect(deep.hits).toHaveLength(1);
+    expect(deep.truncated).toEqual([]);
   });
 });

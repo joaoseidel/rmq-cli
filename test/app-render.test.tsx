@@ -73,3 +73,90 @@ describe("App", () => {
     unmount();
   });
 });
+
+describe("searching across filtered queues", () => {
+  const seed = {
+    "order-processing": ['{"ref":"AB-991"}'],
+    "order-dlq": ['{"ref":"AB-991"}'],
+    "audit-log": ['{"ref":"AB-991"}'],
+  };
+
+  it("searches the queues the filter left, and no others", async () => {
+    const { lastFrame, stdin, unmount } = render(<App container={build(seed)} />);
+    await settle();
+
+    // Narrow the queue list to the order queues...
+    stdin.write("/");
+    await settle();
+    stdin.write("order");
+    await settle();
+    stdin.write("\r");
+    await settle();
+
+    // ...then search across exactly those.
+    stdin.write("s");
+    await settle();
+    stdin.write("AB-991");
+    await settle();
+    stdin.write("\r");
+    await settle();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Search 2 queues");
+    expect(frame).toContain("order-processing");
+    expect(frame).toContain("order-dlq");
+    // Outside the filter, so it must not appear among the hits.
+    expect(frame).not.toContain("audit-log");
+    unmount();
+  });
+
+  it("says how much of the scope it covered", async () => {
+    const { lastFrame, stdin, unmount } = render(<App container={build(seed)} />);
+    await settle();
+
+    stdin.write("s");
+    await settle();
+    stdin.write("AB-991");
+    await settle();
+    stdin.write("\r");
+    await settle();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("3 queues searched");
+    expect(frame).toContain("3 messages peeked");
+    expect(frame).toContain("3 messages matching");
+    unmount();
+  });
+});
+
+describe("adjusting how deep a search goes", () => {
+  it("finds on + what the default depth stopped short of", async () => {
+    // The needle sits past the 200-message default, so the first run must miss
+    // it and say why, and + must then reach it.
+    const payloads = Array.from({ length: 250 }, (_, i) => (i === 240 ? "needle" : "hay"));
+    const { lastFrame, stdin, unmount } = render(<App container={build({ orders: payloads })} />);
+    await settle();
+
+    stdin.write("s");
+    await settle();
+    stdin.write("needle");
+    await settle();
+    stdin.write("\r");
+    await settle();
+
+    let frame = lastFrame() ?? "";
+    expect(frame).toContain("up to 200 messages each");
+    expect(frame).toContain("No messages matching 'needle'");
+    expect(frame).toContain("hit the 200-message cap");
+    expect(frame).toContain("press + to search deeper");
+
+    stdin.write("+");
+    await settle();
+
+    frame = lastFrame() ?? "";
+    expect(frame).toContain("up to 500 messages each");
+    expect(frame).toContain("1 message matching");
+    expect(frame).not.toContain("hit the 500-message cap");
+    unmount();
+  });
+});
