@@ -1,324 +1,255 @@
-# RMQ-CLI
+# rmq
 
-A powerful command-line interface for interacting with RabbitMQ. Manage connections, queues, and messages with ease
-through a simple and intuitive command-line experience.
+A full-screen terminal application for working with RabbitMQ, built with
+[Ink](https://github.com/vadimdemedes/ink).
 
-## Overview
+Run `rmq` and you get an interactive browser: queues on the left, messages one
+keystroke away, and every operation — publishing, purging, moving messages,
+exporting to disk, live tailing — driven from inside the app. There are no
+subcommands and no flags to memorise.
 
-RMQ-CLI is a command-line tool written in Kotlin that provides comprehensive management capabilities for RabbitMQ
-message brokers. The tool follows a domain-driven design approach with a clean architecture, making it both powerful and
-maintainable.
+```
+rmq • Queues • local-dev • /
+────────────────────────────────────────────────────────────────────────────────
+filter: order (3 matching)
+┌──────────────────────────────┬───────┬───────┬─────────┐
+│ Name                         │ VHost │ Ready │ Unacked │
+├──────────────────────────────┼───────┼───────┼─────────┤
+│ order-processing             │ /     │  1042 │       3 │
+│ order-failed                 │ /     │    17 │       0 │
+│ order-dlq                    │ /     │     4 │       0 │
+└──────────────────────────────┴───────┴───────┴─────────┘
+1/3 • 1042 messages in order-processing
+────────────────────────────────────────────────────────────────────────────────
+↑↓ move  ⏎ open  / filter  r refresh  p purge  t tail  : actions  ? help  q quit
+```
 
-This project was born out of the need for advanced message handling capabilities that aren't available in the official
-RabbitMQ CLI. When working with complex messaging systems, I frequently needed to:
+## Why
 
-- Search for specific message content across multiple queues
-- Reprocess failed messages by republishing them to their original exchanges
-- Requeue messages from one queue to another to handle backpressure
-- Export messages from multiple queues for analysis and debugging
-- Filter queues using glob patterns to easily manage systems with many queues
+The official RabbitMQ tooling is good at administration and weak at the things
+you actually do when something is broken at 2am: finding the one message with
+the bad payload, moving a batch off a dead-letter queue, replaying a failure,
+taking a copy of a queue before you touch it.
 
-The official RabbitMQ CLI is excellent for basic administrative tasks, but it lacks these sophisticated message handling
-features that are essential for day-to-day operations in production environments. RMQ-CLI fills this gap by providing a
-rich set of commands specifically designed for message-level operations and advanced queue management.
+Those are exploratory tasks. You do not know the queue name in advance, you page
+through messages until you find the interesting one, and each step depends on
+what the last one showed. That is a browsing problem, not a scripting problem —
+so `rmq` is a browser.
 
-## Features
+> **Version 2 is a rewrite.** Up to 1.5 `rmq` was a Kotlin/Gradle CLI with
+> subcommands and flags, distributed as a GraalVM native binary. It is now a
+> Node application and a browser rather than a command set. The old
+> implementation remains in the git history; message ids are unchanged, so ids
+> in existing exports still resolve.
 
-- **Connection Management**: Add, list, remove and set default connections to RabbitMQ brokers
-- **VHost Management**: List and set default virtual hosts
-- **Queue Operations**: List, search, inspect, purge, consume, export and more
-- **Message Operations**: Publish, inspect, search, requeue, reprocess and delete messages
-- **Native Executables**: Builds to native executables for multiple platforms using GraalVM
+## Install
 
-## Installation
-
-### Download Pre-built Binary
-
-The easiest way to install RMQ-CLI is to download the pre-built binary for your platform from
-the [releases page](https://github.com/joaoseidel/rmq-cli/releases).
-
-### Build from Source
-
-You can also build RMQ-CLI from source:
+Requires Node.js 20 or newer. Nothing to install — run it:
 
 ```bash
-# Clone the repository
+npx rmq-cli
+```
+
+`npx @joaoseidel/rmq` runs the same thing; that package is a thin alias, since
+the bare name `rmq` was already taken on npm by an unrelated project.
+
+For a permanent `rmq` on your PATH:
+
+```bash
+npm install -g rmq-cli
+```
+
+Prebuilt packages are also attached to each
+[release](https://github.com/joaoseidel/rmq-cli/releases) as a `.tgz`:
+
+```bash
+npm install -g rmq-cli-<version>.tgz
+```
+
+From source, for development:
+
+```bash
 git clone https://github.com/joaoseidel/rmq-cli.git
 cd rmq-cli
+pnpm install
+pnpm run dev       # run straight from the source tree
 
-# Build the project (creates a native executable)
-./gradlew nativeCompile
-
-# The executable will be available at
-# rmq-cli-app/build/native/nativeCompile/rmq
+pnpm run build
+npm link           # or build and put `rmq` on your PATH
 ```
 
-## Usage
+## Getting started
 
-Each command supports the `--help` flag to display usage information:
+On first run — with no connection configured — `rmq` opens on the connection
+form. Fill it in, press Enter, and the connection is tested against the broker
+before it is saved. A connection that cannot connect is never stored.
 
-```bash
-rmq --help                   # Show main help
-rmq connection --help        # Show connection command help
-rmq queue --help             # Show queue command help
-rmq message --help           # Show message command help
-```
+From then on `rmq` opens on the queue list for your default connection.
 
-### Connection Management
+## Keys
 
-Before using RMQ-CLI, you need to configure a connection to your RabbitMQ broker:
+Press `?` inside the app for the full reference, or `:` to open the action list,
+which is searchable and shows everything available from the current screen.
 
-```bash
-# Get help on connection add command
-rmq connection add --help
+| Key           | Does                                                     |
+| ------------- | -------------------------------------------------------- |
+| `:`           | open the action list — the reliable way to find anything |
+| `?`           | key reference                                            |
+| `↑ ↓` / `j k` | move the cursor                                          |
+| `⏎`           | open the selected queue or message                       |
+| `/`           | filter the current list; `⏎` applies, `esc` clears       |
+| `r`           | re-read from the broker                                  |
+| `esc`         | back one screen                                          |
+| `q`           | back, or quit from the queue list                        |
 
-# Add a new connection
-rmq connection add local-dev --host localhost --username rabbitmq --password rabbitmq --vhost / --type amqp
+On the queue list: `p` purge, `t` live tail, `e` export, `i` import, `w`
+publish, `m` move messages, `c` connections, `v` virtual hosts.
 
-# List all connections
-rmq connection list
+On a queue or an open message: `d` delete, `M` move it to another queue, `R`
+reprocess it to its original exchange.
 
-# Set a connection as default
-rmq connection set-default local-dev
+## What it does
 
-# Remove a connection
-rmq connection remove local-dev
-```
+**Queues** — browse, filter by glob, inspect depths, purge, and tail live.
 
-### Virtual Host Management
+**Messages** — page through a queue without consuming anything, read payloads
+with JSON pretty-printed, filter by content, delete, move to another queue, or
+reprocess to the original exchange.
 
-```bash
-# Get help on vhost commands
-rmq connection vhost --help
+**Publishing** — send to a queue or to an exchange with a routing key, with the
+body typed inline or read from a file.
 
-# List all virtual hosts
-rmq connection vhost list
+**Files** — export a queue to JSON (leaving it untouched by default) and import
+that file back into any queue.
 
-# Set a default virtual host for a connection
-rmq connection vhost set-default my-vhost
-```
+**Connections** — add, remove, and switch between brokers and virtual hosts, all
+without leaving the app.
 
-### Queue Operations
+### Safety
 
-```bash
-# Get help on queue commands
-rmq queue --help
+Browsing never consumes. Messages are read without acknowledgement, so anything
+you look at — including a live tail — is still on the broker when you close the
+screen.
 
-# List all queues
-rmq queue list
+Only purge, delete, move, and export-with-removal change anything, and each asks
+first, quoting the number of messages at stake.
 
-# List queues matching a pattern using the --pattern parameter
-rmq queue list --pattern "temp.*"
+**Removing one message rewrites the queue.** AMQP has no delete-by-id: a message
+can only be taken off the queue it is being read from. So deleting, moving, or
+reprocessing a single message drains the whole queue and republishes everything
+that was _not_ targeted. The app says so before it does it, and reports how many
+messages it put back.
 
-# Search for queues matching a pattern (returns queues, not messages)
-rmq queue search "service-*"
+That is also why every destructive operation runs behind a write-ahead log.
+Before anything is taken off a queue it is written to
+`~/.rmq-cli/message_backup_operations.json`, and each message is cleared from
+that file only once the broker has taken it back. If an operation dies half-way,
+whatever it was holding is still on disk under the operation id the app reports,
+and the app tells you when that has happened rather than reporting success.
 
-# Search for queues matching a pattern
-rmq queue search "user.*"
+Moves publish the copy before removing the original, so an interruption
+duplicates a message rather than losing it.
 
-# Glob pattern examples:
-# Match queues starting with 'order':
-rmq queue search "order*"
-# Match queues ending with 'failed':
-rmq queue search "*failed"
-# Match queues with exactly 5 characters:
-rmq queue search "?????"
-# Match queues with 'event' anywhere in the name:
-rmq queue search "*event*"
+### Connection types
 
-# Inspect a specific queue
-rmq queue inspect my-queue
+**AMQP** is the default and supports everything.
 
-# Consume messages from a queue
-rmq queue consume my-queue --ack
-
-# Export messages from a queue to a file
-rmq queue export my-queue --output messages.json --limit 100
-
-# Export from multiple queues by treating the queue name as a pattern
-rmq queue export "order.*" --pattern --output orders.json --limit 50
-
-# Export all messages from error queues (acknowledging them after export)
-rmq queue export "error.*" --pattern --output errors.json --limit 100 --ack
-
-# Purge a queue (remove all messages)
-rmq queue purge my-queue
-
-# Requeue messages from one queue to another
-rmq queue requeue --from source-queue --to destination-queue --all
-
-# Reprocess messages (publish back to their original exchange)
-rmq queue reprocess --from my-queue --all
-```
-
-### Message Operations
-
-```bash
-# Get help on message commands
-rmq message --help
-
-# Get help on message publish command
-rmq message publish --help
-
-# Publish a message to a queue
-rmq message publish --queue my-queue --payload '{"key": "value"}'
-
-# Publish a message to an exchange with routing key
-rmq message publish --exchange my-exchange --routing-key user.created --payload '{"id": 123}'
-
-# Search for messages containing specific content
-rmq message search "error" --queue my-queue
-
-# Glob pattern examples for message searching:
-# Search for JSON messages with a specific property:
-rmq message search "*\"status\":\"failed\"*" --queue orders
-# Search for XML messages with error tags:
-rmq message search "*<error>*" --queue notifications
-# Search messages containing a specific ID:
-rmq message search "*id-12345*" --queue events
-# Search for error messages (glob pattern is converted to regex):
-rmq message search "*error*" --queue logs
-
-# Inspect a specific message
-rmq message inspect message-id my-queue
-
-# Requeue a message to another queue
-rmq message requeue message-id --from source-queue --to destination-queue
-
-# Reprocess a message (publish back to original exchange/routing key)
-rmq message reprocess message-id --from my-queue
-
-# Delete a message
-rmq message delete message-id my-queue
-```
-
-## Pattern Matching Parameters
-
-The RMQ-CLI offers several parameters for pattern matching when working with queues and messages:
-
-- `--pattern`: Used to treat the provided string as a pattern for queue names
-- `--queue-pattern`: Used to filter queues by name pattern while searching for messages
-- `--global`: Used to search across all queues in the virtual host
-
-### Examples Using Queue Patterns
-
-```bash
-# List queues matching a pattern
-rmq queue list --pattern "service.*"
-
-# Search for messages containing "error" in queues matching a pattern
-rmq message search "error" --queue-pattern "log.*"
-
-# Search for messages in all queues (use with caution on busy brokers)
-rmq message search "critical" --global
-
-# Export messages from multiple queues matching a pattern
-rmq queue export --queue-pattern "order.*" --output orders.json
-
-# Reprocess all messages from a specific queue
-rmq queue reprocess --from retry-queue --all
-```
-
-## Glob Pattern Syntax
-
-The RMQ-CLI supports basic glob patterns for searching queues and messages. Here's a quick reference for the syntax:
-
-- `*`: Matches any number of characters (including zero)
-- `?`: Matches exactly one character
-
-Note: The implementation converts glob patterns to regular expressions internally. Specifically, it:
-
-1. Escapes periods (`.` → `\.`)
-2. Converts asterisks (`*` → `.*`)
-3. Converts question marks (`?` → `.`)
-
-The code does not specifically implement character class support (`[abc]` or `[a-z]`), though these may work in some
-cases through the regular expression conversion.
-
-### Examples
-
-| Pattern   | Matches                                | Doesn't Match               |
-|-----------|----------------------------------------|-----------------------------|
-| `order*`  | `order`, `orders`, `order-processing`  | `my-order`, `reorder`       |
-| `*event*` | `event`, `events`, `new-event-handler` | none                        |
-| `user-?`  | `user-A`, `user-1`                     | `user-`, `user-admin`       |
-| `????`    | `user`, `test`, `1234`                 | `a`, `toolong`              |
-| `*.error` | `app.error`, `system.error`            | `error`, `system.error.log` |
-
-You can use these patterns with several commands including `queue list`, `queue search`, `message search`, and
-`queue export`.
-
-## Connection Type Support
-
-RMQ-CLI supports two main types of connections to RabbitMQ:
-
-- **AMQP** (`--type amqp`): For full messaging operations, including real-time consumption
-- **HTTP** (`--type http`): For management operations through RabbitMQ's HTTP API
-
-### AMQP Connection
-
-```bash
-# See all options for adding a connection
-rmq connection add --help
-
-rmq connection add local-amqp --host localhost --username guest --password guest --vhost / --type amqp --amqp-port 5672 --http-port 15672
-```
-
-The AMQP connection supports all functionalities and is recommended for most use cases.
-
-### HTTP Connection
-
-```bash
-rmq connection add local-http --host localhost --username guest --password guest --vhost / --type http --http-port 15672
-```
-
-The HTTP connection is limited to management operations and does not support:
-
-- Real-time message consumption
-- Some advanced message handling operations
+**HTTP** talks to the management API only. Queue and message operations work,
+but live tailing does not — the management API cannot stream. The action list
+greys out anything unavailable and says why, rather than hiding it.
 
 ## Configuration
 
-RMQ-CLI stores connection settings in `~/.rmq-cli/settings.json`. These settings are managed automatically through the
-CLI commands.
+Connections live in `~/.rmq-cli/settings.json`, written with `0600` permissions.
+Set `RMQ_HOME` to relocate it.
+
+Broker passwords are encrypted with AES-256-GCM before they are written. The key
+is generated on first run and kept in `~/.rmq-cli/key`, also at `0600`; settings
+carrying a plaintext password from an older version are re-encrypted the next
+time `rmq` starts. This guards against casual disclosure — a synced dotfile
+directory, a home backup, a `cat settings.json` over someone's shoulder. It is
+not a defence against an attacker who can already read your home directory,
+since the key sits beside the data.
+
+Back up `key` alongside `settings.json`: without it the stored passwords cannot
+be recovered. A connection whose password fails to decrypt still appears in the
+list, with an empty password to re-enter.
+
+Diagnostics go to `~/.rmq-cli/rmq-cli.log`; `RMQ_LOG_LEVEL` accepts `debug`,
+`info`, `warn`, or `error`. Nothing is ever logged to stdout — Ink owns the
+screen, and a stray write corrupts the frame.
 
 ## Development
 
-### Prerequisites
-
-- JDK 23 or higher
-- GraalVM Community Edition (for native compilation)
-- Gradle 8.x
-
-### Building the Project
-
 ```bash
-# Build the project
-./gradlew build
-
-# Run the application
-./gradlew run
-
-# Create a native executable
-./gradlew nativeCompile
+pnpm run dev        # run from source
+pnpm test           # unit and component tests
+pnpm run typecheck  # tsc --noEmit
+pnpm run build      # compile to dist/
 ```
 
-### Project Structure
+CI runs the same three checks on Node 20 and current LTS for every push and pull
+request. Releases are cut manually with the **Create Semantic Release** workflow,
+which derives the version from the commit history, updates `CHANGELOG.md` and
+`package.json`, and attaches a packed tarball to the GitHub release. It does not
+publish to the npm registry — flip `npmPublish` in `.releaserc.json` and add an
+`NPM_TOKEN` if you want that.
 
-- `rmq-cli-core`: Core domain models and interfaces
-- `rmq-cli-clikt`: CLI implementation using the Clikt library
-- `rmq-cli-app`: Main application and adapter implementations
+A RabbitMQ instance with sample data is available for local work:
+
+```bash
+docker compose -f .docker-compose/dev-stack.yml up -d
+```
+
+It listens on 5672 (AMQP) and 15672 (management), with `rabbitmq`/`rabbitmq` as
+the credentials.
+
+### Layout
+
+```
+src/
+├── bin/rmq.tsx        entry point: alternate screen buffer, render, restore
+├── container.ts       dependency wiring, and the seam for test doubles
+├── core/              broker-agnostic domain logic
+│   ├── domain/        message ids, connections, queues, operation results
+│   ├── ports/         interfaces the adapters implement
+│   ├── usecase/       what the app can do, independent of transport and UI
+│   └── util/          glob matching, text helpers, file logger
+├── adapters/
+│   ├── rabbitmq/      AMQP and management-API clients behind one interface
+│   └── storage/       JSON-backed settings, connection registry, backup log
+└── ui/
+    ├── components/
+    │   ├── common/    input primitives: select, text field, form, confirm
+    │   ├── parts/     reusable pieces: table, spinner, frame, palette
+    │   └── screens/   one file per full-screen view
+    ├── hooks/         terminal size, async state, list navigation, key input
+    ├── actions.ts     what the action list offers, and when
+    ├── screens.ts     the screen union and its parameters
+    └── theme.ts       colour roles and glyphs
+```
+
+The dependency rule is one-directional: `ui` and `adapters` both depend on
+`core`, and `core` depends on neither. Swapping the broker client or the storage
+backend means implementing a port in `src/core/ports/` and changing one line in
+`container.ts`.
+
+### A note on `useKeyHandler`
+
+Use `src/ui/hooks/use-key-handler.ts` rather than Ink's `useInput` directly.
+
+Ink subscribes its keypress listener in an effect keyed only on `isActive`, so
+the callback it retains is the one from the render where the subscription
+happened — every later closure, and every piece of state it reads, is ignored.
+In practice a text field reads back its initial empty value on each keystroke and
+a list acts on whichever row was selected when the screen first appeared.
+`useKeyHandler` routes through a ref, so handlers always see the current render's
+values. `test/text-input.test.tsx` covers the regression.
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
+Apache 2.0 — see `LICENSE`.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Pull requests welcome. Please keep `npm run typecheck` and `npm test` green.

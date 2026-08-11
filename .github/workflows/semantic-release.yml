@@ -12,21 +12,49 @@ jobs:
       issues: write
       pull-requests: write
       id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "lts/*"
+          node-version: lts/*
+          cache: pnpm
+          # Writes an .npmrc pointing at npmjs.org and reading NODE_AUTH_TOKEN,
+          # which is what both `semantic-release` and the alias publish use.
+          registry-url: https://registry.npmjs.org
 
-      - name: Install Semantic Release and plugins
-        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/npm @semantic-release/github @semantic-release/git
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: |
+          pnpm run typecheck
+          pnpm test
+
+      - name: Build
+        # dist/ is what package.json ships, so it has to exist before the
+        # release is packed.
+        run: pnpm run build
 
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_SMR_TOKEN }}
-        run: npx semantic-release
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm dlx
+          semantic-release@24
+          -p @semantic-release/commit-analyzer
+          -p @semantic-release/release-notes-generator
+          -p @semantic-release/changelog
+          -p @semantic-release/npm
+          -p @semantic-release/exec
+          -p @semantic-release/git
+          -p @semantic-release/github

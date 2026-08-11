@@ -1,0 +1,245 @@
+import type { Container } from "../../container.ts";
+import type { ConnectionInfo } from "../../core/domain/connection.ts";
+import type { Message } from "../../core/domain/message.ts";
+import type { Queue } from "../../core/domain/queue.ts";
+import type { VHost } from "../../core/domain/vhost.ts";
+import type { ActionId } from "../actions.ts";
+import type { Screen } from "../screens.ts";
+import { ConnectionFormScreen } from "./screens/connection-form-screen.tsx";
+import { ConnectionsScreen } from "./screens/connections-screen.tsx";
+import { ConsumeScreen } from "./screens/consume-screen.tsx";
+import { HelpScreen } from "./screens/help-screen.tsx";
+import { MessageScreen } from "./screens/message-screen.tsx";
+import { MoveMessageScreen } from "./screens/move-message-screen.tsx";
+import { PublishScreen } from "./screens/publish-screen.tsx";
+import { QueueScreen } from "./screens/queue-screen.tsx";
+import { QueuesScreen } from "./screens/queues-screen.tsx";
+import { TransferFileScreen } from "./screens/transfer-file-screen.tsx";
+import { TransferScreen } from "./screens/transfer-screen.tsx";
+import { VHostsScreen } from "./screens/vhosts-screen.tsx";
+
+export type Tone = "success" | "danger";
+
+/**
+ * Everything a screen may need from the app shell.
+ *
+ * Collected into one object so the router can hand each screen what it asks for
+ * without the app spelling out a bespoke prop list per screen.
+ */
+export interface ScreenContext {
+  readonly container: Container;
+  readonly connection: ConnectionInfo;
+  readonly width: number;
+  readonly height: number;
+  readonly isActive: boolean;
+
+  readonly loadQueues: () => Promise<Queue[]>;
+  readonly loadMessages: (queue: Queue) => Promise<Message[]>;
+
+  readonly announce: (text: string, tone?: Tone) => void;
+  readonly refresh: () => void;
+  readonly runAction: (id: ActionId) => void;
+
+  readonly push: (screen: Screen) => void;
+  readonly back: () => void;
+  readonly reset: () => void;
+
+  readonly setConnection: (connection: ConnectionInfo) => void;
+  /** Persists the vhost choice, then rebases the browser on it. */
+  readonly switchVHost: (vhost: VHost) => void;
+  readonly onQueueSelectionChange: (queue: Queue | null) => void;
+  readonly onMessageSelectionChange: (message: Message | null) => void;
+
+  /** Set by the palette's Filter action; cleared by the screen that opens it. */
+  readonly filterRequested: boolean;
+  readonly onFilterOpened: () => void;
+}
+
+/**
+ * Renders the screen on top of the navigation stack.
+ *
+ * A `switch` over the discriminated union rather than a ternary chain, so a new
+ * screen that is not wired up here is a compile error rather than a silent fall
+ * through to the help page.
+ */
+export function ScreenRouter({ screen, ctx }: { readonly screen: Screen; readonly ctx: ScreenContext }) {
+  switch (screen.name) {
+    case "queues":
+      return (
+        <QueuesScreen
+          loadQueues={ctx.loadQueues}
+          openFilter={ctx.filterRequested}
+          onFilterOpened={ctx.onFilterOpened}
+          onSelectionChange={ctx.onQueueSelectionChange}
+          onOpen={(queue) => ctx.push({ name: "queue", queue })}
+          onAction={ctx.runAction}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+        />
+      );
+
+    case "queue":
+      return (
+        <QueueScreen
+          queue={screen.queue}
+          loadMessages={ctx.loadMessages}
+          openFilter={ctx.filterRequested}
+          onFilterOpened={ctx.onFilterOpened}
+          onSelectionChange={ctx.onMessageSelectionChange}
+          onOpen={(message) => ctx.push({ name: "message", queue: screen.queue, message })}
+          onAction={ctx.runAction}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+        />
+      );
+
+    case "message":
+      return (
+        <MessageScreen
+          message={screen.message}
+          onAction={ctx.runAction}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+        />
+      );
+
+    case "move-message":
+      return (
+        <MoveMessageScreen
+          mode={screen.mode}
+          broker={ctx.container.broker}
+          messages={ctx.container.messages}
+          connection={ctx.connection}
+          queue={screen.queue}
+          message={screen.message}
+          isActive={ctx.isActive}
+          onCancel={ctx.back}
+          onDone={(text, tone) => {
+            ctx.announce(text, tone);
+            ctx.refresh();
+            // Back to the queue: the message that was open no longer exists.
+            ctx.reset();
+            ctx.push({ name: "queue", queue: screen.queue });
+          }}
+        />
+      );
+
+    case "consume":
+      return (
+        <ConsumeScreen
+          broker={ctx.container.broker}
+          queues={ctx.container.queues}
+          connection={ctx.connection}
+          queue={screen.queue}
+          acknowledge={false}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+        />
+      );
+
+    case "publish":
+      return (
+        <PublishScreen
+          broker={ctx.container.broker}
+          messages={ctx.container.messages}
+          connection={ctx.connection}
+          {...(screen.queue === undefined ? {} : { queueName: screen.queue.name })}
+          isActive={ctx.isActive}
+          onCancel={ctx.back}
+          onDone={(text) => {
+            ctx.announce(text);
+            ctx.back();
+          }}
+        />
+      );
+
+    case "transfer":
+      return (
+        <TransferScreen
+          broker={ctx.container.broker}
+          queues={ctx.container.queues}
+          connection={ctx.connection}
+          {...(screen.from === undefined ? {} : { fromQueue: screen.from.name })}
+          isActive={ctx.isActive}
+          onCancel={ctx.back}
+          onDone={(text) => {
+            ctx.announce(text);
+            ctx.refresh();
+            ctx.back();
+          }}
+        />
+      );
+
+    case "export":
+    case "import":
+      return (
+        <TransferFileScreen
+          mode={screen.name}
+          broker={ctx.container.broker}
+          messages={ctx.container.messages}
+          connection={ctx.connection}
+          queue={screen.queue}
+          isActive={ctx.isActive}
+          onCancel={ctx.back}
+          onDone={(text) => {
+            ctx.announce(text);
+            ctx.refresh();
+            ctx.back();
+          }}
+        />
+      );
+
+    case "connections":
+      return (
+        <ConnectionsScreen
+          connections={ctx.container.connections}
+          activeId={ctx.connection.id}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+          onAdd={() => ctx.push({ name: "connection-form" })}
+          onChanged={ctx.announce}
+          onUse={(selected) => {
+            ctx.setConnection(selected);
+            ctx.announce(`Browsing ${selected.name}.`);
+            ctx.reset();
+          }}
+        />
+      );
+
+    case "connection-form":
+      return (
+        <ConnectionFormScreen
+          connections={ctx.container.connections}
+          isActive={ctx.isActive}
+          onCancel={ctx.back}
+          onSaved={(saved) => {
+            ctx.setConnection(saved);
+            ctx.announce(`Added ${saved.name}.`);
+            ctx.reset();
+          }}
+        />
+      );
+
+    case "vhosts":
+      return (
+        <VHostsScreen
+          broker={ctx.container.broker}
+          vhosts={ctx.container.vhosts}
+          connection={ctx.connection}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+          onCancel={ctx.back}
+          onSelect={ctx.switchVHost}
+        />
+      );
+
+    case "help":
+      return <HelpScreen width={ctx.width} height={ctx.height} />;
+  }
+}

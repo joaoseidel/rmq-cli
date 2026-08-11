@@ -1,0 +1,40 @@
+{
+  "name": "@joaoseidel/rmq",
+  "version": "2.0.0",
+  "description": "Alias for rmq-cli — a full-screen terminal browser for RabbitMQ",
+  "license": "Apache-2.0",
+  "type": "module",
+  "homepage": "https://github.com/joaoseidel/rmq-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joaoseidel/rmq-cli.git",
+    "directory": "npm/rmq-alias"
+  },
+  "bugs": {
+    "url": "https://github.com/joaoseidel/rmq-cli/issues"
+  },
+  "bin": {
+    "rmq": "./bin/rmq.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "rmq-cli": "2.0.0"
+  },
+  "keywords": [
+    "rabbitmq",
+    "amqp",
+    "tui",
+    "ink",
+    "terminal",
+    "queue",
+    "messaging"
+  ]
+}

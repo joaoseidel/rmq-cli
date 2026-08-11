@@ -1,0 +1,60 @@
+{
+  "name": "rmq-cli",
+  "version": "2.0.0",
+  "description": "A full-screen terminal browser for RabbitMQ, built with Ink",
+  "license": "Apache-2.0",
+  "type": "module",
+  "homepage": "https://github.com/joaoseidel/rmq-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joaoseidel/rmq-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joaoseidel/rmq-cli/issues"
+  },
+  "bin": {
+    "rmq": "./dist/bin/rmq.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/bin/rmq.js",
+    "dev": "tsx src/bin/rmq.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "amqplib": "^2.0.1",
+    "ink": "^7.1.1",
+    "react": "^19.2.8",
+    "string-width": "^8.2.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "keywords": [
+    "rabbitmq",
+    "amqp",
+    "tui",
+    "ink",
+    "terminal",
+    "queue",
+    "messaging"
+  ]
+}
