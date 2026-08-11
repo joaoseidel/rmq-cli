@@ -1,332 +1,150 @@
 # rmq
 
-A full-screen terminal application for working with RabbitMQ, built with
-[Ink](https://github.com/vadimdemedes/ink).
+[![npm version](https://img.shields.io/npm/v/rmq-cli?color=blue&label=rmq-cli)](https://www.npmjs.com/package/rmq-cli)
+[![CI](https://github.com/joaoseidel/rmq-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/joaoseidel/rmq-cli/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/rmq-cli)](LICENSE)
+[![node](https://img.shields.io/node/v/rmq-cli)](package.json)
 
-Run `rmq` and you get an interactive browser: queues on the left, messages one
-keystroke away, and every operation (publishing, purging, moving messages,
-exporting to disk, live tailing) driven from inside the app. There are no
-subcommands and no flags to memorise.
+A full-screen terminal browser for RabbitMQ, built with [Ink](https://github.com/vadimdemedes/ink).
 
-```
-rmq • Queues • local-dev • /
-────────────────────────────────────────────────────────────────────────────────
-filter: order (3 matching)
-┌──────────────────────────────┬───────┬───────┬─────────┐
-│ Name                         │ VHost │ Ready │ Unacked │
-├──────────────────────────────┼───────┼───────┼─────────┤
-│ order-processing             │ /     │  1042 │       3 │
-│ order-failed                 │ /     │    17 │       0 │
-│ order-dlq                    │ /     │     4 │       0 │
-└──────────────────────────────┴───────┴───────┴─────────┘
-1/3 • 1042 messages in order-processing
-────────────────────────────────────────────────────────────────────────────────
-↑↓ move  ⏎ open  / filter  s search  r refresh  p purge  t tail  : actions  ? help  q quit
-```
+![rmq-cli demo](assets/demo.gif)
 
-## Why
+## Features
 
-The official RabbitMQ tooling is good at administration and weak at the things
-you actually do when something is broken at 2am: finding the one message with
-the bad payload, moving a batch off a dead-letter queue, replaying a failure,
-taking a copy of a queue before you touch it.
-
-Those are exploratory tasks. You do not know the queue name in advance, you page
-through messages until you find the interesting one, and each step depends on
-what the last one showed. That is a browsing problem, not a scripting problem,
-so `rmq` is a browser.
-
-> **Version 2 is a rewrite.** Up to 1.5 `rmq` was a Kotlin/Gradle CLI with
-> subcommands and flags, distributed as a GraalVM native binary. It is now a
-> Node application and a browser rather than a command set. The old
-> implementation remains in the git history; message ids are unchanged, so ids
-> in existing exports still resolve.
+- **Queue browser** - filter by glob, inspect depths, purge, and tail live
+- **Message inspection** - page through without consuming, pretty-printed JSON, filter by payload/headers/id
+- **Cross-queue search** - search across multiple queues at once, results stream in
+- **Publishing** - send to a queue or exchange with routing key, body inline or from file
+- **Export / import** - dump a queue to JSON, import back into any queue
+- **Bulk actions** - mark rows with `space`, then act on all of them at once
+- **Multi-connection** - add, remove, and switch between brokers and virtual hosts
+- **Safe by default** - browsing never consumes; destructive operations ask first and log to a write-ahead backup
 
 ## Install
 
-Requires Node.js 22 or newer. Nothing to install, just run it:
+Requires [Node.js](https://nodejs.org/) >= 22.
 
 ```bash
 npx rmq-cli
 ```
 
-`npx @joaoseidel/rmq` runs the same thing; that package is a thin alias, since
-the bare name `rmq` was already taken on npm by an unrelated project.
-
-For a permanent `rmq` on your PATH:
+Permanent install:
 
 ```bash
 npm install -g rmq-cli
 ```
 
-Prebuilt packages are also attached to each
-[release](https://github.com/joaoseidel/rmq-cli/releases) as a `.tgz`:
+From a [release tarball](https://github.com/joaoseidel/rmq-cli/releases):
 
 ```bash
 npm install -g rmq-cli-<version>.tgz
 ```
 
-From source, for development:
-
-```bash
-git clone https://github.com/joaoseidel/rmq-cli.git
-cd rmq-cli
-pnpm install
-pnpm run dev       # run straight from the source tree
-
-pnpm run build
-npm link           # or build and put `rmq` on your PATH
-```
-
 ## Getting started
 
-On first run, with no connection configured, `rmq` opens on the connection
-form. Fill it in, press Enter, and the connection is tested against the broker
-before it is saved. A connection that cannot connect is never stored.
+On first run, `rmq` opens on the connection form. Fill it in and press **Enter** - the connection is tested before it is saved. From then on it opens on the queue list for your default connection.
 
-From then on `rmq` opens on the queue list for your default connection.
+## Key bindings
 
-## Keys
+Press `?` for context-sensitive help. The footer always shows available keys for the current screen.
 
-Press `?` for the keys of the screen you are on. The help page leads with that
-screen's own bindings, then the ones that work anywhere, or `:` to open the
-action list, which is searchable and shows everything available from here.
+| Key            | Action                                      |
+| -------------- | ------------------------------------------- |
+| `:`            | open the action list                        |
+| `.`            | actions for the row under the cursor        |
+| `?`            | key reference                               |
+| `↑` `↓` `j` `k` | move the cursor                          |
+| `Enter`        | open selected queue or message              |
+| `/`            | filter list (`Enter` applies, `Esc` clears) |
+| `s`            | search messages across filtered queues      |
+| `r`            | re-read from broker                         |
+| `Space`        | mark row, step to next                      |
+| `a`            | mark/unmark all filtered rows               |
+| `Esc`          | back one screen                             |
+| `q`            | back or quit                                |
 
-| Key           | Does                                                    |
-| ------------- | ------------------------------------------------------- |
-| `:`           | open the action list, the reliable way to find anything |
-| `.`           | actions for the row under the cursor                    |
-| `?`           | key reference                                           |
-| `↑ ↓` / `j k` | move the cursor                                         |
-| `⏎`           | open the selected queue or message                      |
-| `/`           | filter the current list; `⏎` applies, `esc` clears      |
-| `s`           | search messages across every filtered queue at once     |
-| `r`           | re-read from the broker                                 |
-| `esc`         | back one screen                                         |
-| `q`           | back, or quit from the queue list                       |
+**Queue list:** `p` purge, `t` tail, `e` export, `i` import, `w` publish, `m` move, `c` connections, `v` virtual hosts.
 
-The footer shows the keys the current screen actually binds, and always keeps
-`: actions`, `? help`, and the way back. Those survive a narrow terminal even
-when the screen's own keys have to be dropped to fit.
+**Queue or message:** `d` delete, `M` move, `R` reprocess to original exchange.
 
-On the queue list: `s` search across the filtered queues, `p` purge, `t` live
-tail, `e` export, `i` import, `w` publish, `m` move messages, `c` connections,
-`v` virtual hosts.
+**Search results:** `+` / `-` adjust depth, `r` re-run, `/` new search.
 
-On any list: `space` marks the row and steps to the next one, `a` marks or
-unmarks everything the filter leaves. Marked rows are shown with a `✓` in a
-gutter and counted under the table. Marks are dropped when you leave the list,
-so they never follow you onto another screen.
+## Safety
 
-`.` opens a menu over the current row listing only what applies to it: queue
-actions for a queue, message actions for a message. `Ctrl+Enter` would be the
-obvious chord for this, but terminals send a plain carriage return for it and it
-cannot be told apart from `Enter`, so `.` is the binding.
-
-On a queue or an open message: `d` delete, `M` move it to another queue, `R`
-reprocess it to its original exchange.
-
-On search results: `+` / `-` search deeper or shallower, `r` re-run the same
-search, `/` start a new one.
-
-On connections: `a` add, `d` make default, `x` remove. On the live tail: `space`
-pause, `x` clear.
-
-## What it does
-
-**Queues.** Browse, filter by glob, inspect depths, purge, and tail live.
-
-**Messages.** Page through a queue without consuming anything, read payloads
-with JSON pretty-printed, filter by content, delete, move to another queue, or
-reprocess to the original exchange. Filtering and search cover the payload, the
-message id, the routing key, and the headers and properties (correlation ids
-usually live in the headers, not the body), and ignore case.
-
-**Search.** `/` narrows the queue list to the queues worth looking in; `s` then
-searches all of them at once for a payload or a message id. Results stream in
-queue by queue, showing which queue each hit came from, and `⏎` opens the hit
-where every message action is already available.
-
-```
-rmq • Search 3 queues • prod • /                                        1 deep
-────────────────────────────────────────────────────────────────────────────────
-search: AB-991 (3 matching)
-3 queues matching 'order' • up to 200 messages each, never consumed
-┌──────────────────┬───────────────────────────────────────────────────────────┐
-│ Queue            │ Payload                                                   │
-├──────────────────┼───────────────────────────────────────────────────────────┤
-│ order-processing │ {"id":1,"ref":"AB-991","customer":"acme-corp"...           │
-│ order-failed     │ {"id":4,"ref":"AB-991","customer":"acme-corp"...           │
-│ order-dlq        │ {"id":6,"ref":"AB-991","customer":"acme-corp"...           │
-└──────────────────┴───────────────────────────────────────────────────────────┘
-1/3 • 00000000000000010b93892c7068a865163b06d7
-3 queues searched • 6 messages peeked • 3 messages matching
-```
-
-The search reads at most 200 messages per queue and says so. When a queue fills
-that cap the screen names it, because a search that stopped short is not
-evidence the message was never there, and `+` re-runs deeper (100, 200, 500,
-1000, 5000, 10000), `-` shallower. Queues that cannot be read are reported
-individually and the rest are searched anyway.
-
-```
-! 1 queue hit the 200-message cap (order-dlq). Press + to search deeper
-```
-
-**Publishing.** Send to a queue or to an exchange with a routing key, with the
-body typed inline or read from a file.
-
-**Files.** Export a queue to JSON (every message, leaving the queue untouched,
-unless you ask otherwise) and import that file back into any queue.
-
-**Bulk actions.** Mark rows with `space`, then act on all of them at once.
-Marked queues purge together; marked messages delete, move, or reprocess
-together. When nothing is marked the action applies to the row under the cursor,
-so the single-message case needs no marking at all.
-
-Batching is not only convenience. Removing a message means draining the queue
-and republishing everything that was not targeted, so deleting five messages one
-at a time meant five full round trips over the queue; marked messages are
-removed in a single pass. The confirmation names what it is about to destroy,
-`Purge 2 queues (order-failed, order-dlq), 41 messages?` rather than just
-counting it.
-
-**Connections.** Add, remove, and switch between brokers and virtual hosts, all
-without leaving the app.
-
-### Safety
-
-Browsing never consumes. Messages are read without acknowledgement, so anything
-you look at, including a live tail, is still on the broker when you close the
-screen.
-
-Only purge, delete, move, and export-with-removal change anything, and each asks
-first, quoting the number of messages at stake.
-
-**Removing one message rewrites the queue.** AMQP has no delete-by-id: a message
-can only be taken off the queue it is being read from. So deleting, moving, or
-reprocessing a single message drains the whole queue and republishes everything
-that was _not_ targeted. The app says so before it does it, and reports how many
-messages it put back.
-
-That is also why every destructive operation runs behind a write-ahead log.
-Before anything is taken off a queue it is written to
-`~/.rmq-cli/message_backup_operations.json`, and each message is cleared from
-that file only once the broker has taken it back. If an operation dies half-way,
-whatever it was holding is still on disk under the operation id the app reports,
-and the app tells you when that has happened rather than reporting success.
-
-Moves publish the copy before removing the original, so an interruption
-duplicates a message rather than losing it.
-
-**Publishes are confirmed, not assumed.** A message is only treated as delivered
-once the broker has both confirmed it and not returned it as unroutable, so a
-destination nothing is bound to is reported as a failure instead of success.
-Destination fields complete against the queues that actually exist (type a
-prefix and press `→`), and a name the broker does not have is refused before
-anything is taken off the source queue. Publishing to a queue whose name has a
-typo in it used to discard every message and report that the move had worked.
+- Browsing reads without acknowledgement - nothing is consumed.
+- Only purge, delete, move, and export-with-removal change anything, and each asks first.
+- Single-message delete/move/reprocess drains and republishes the queue; the app warns before doing it.
+- All destructive operations run behind a write-ahead log at `~/.rmq-cli/message_backup_operations.json`.
+- Moves publish the copy before removing the original - interruption duplicates, never loses.
+- Publishes are confirmed by the broker; unroutable destinations are reported as failures.
 
 ### Connection types
 
-**AMQP** is the default and supports everything.
-
-**HTTP** talks to the management API only. Queue and message operations work,
-but live tailing does not, because the management API cannot stream. The action list
-greys out anything unavailable and says why, rather than hiding it.
+| Type | Capabilities                                         |
+| ---- | ---------------------------------------------------- |
+| AMQP | Full support including live tail                     |
+| HTTP | Management API only; live tail greyed out            |
 
 ## Configuration
 
-Connections live in `~/.rmq-cli/settings.json`, written with `0600` permissions.
-Set `RMQ_HOME` to relocate it.
+Settings live in `~/.rmq-cli/settings.json` (mode `0600`). Set `RMQ_HOME` to relocate.
 
-Broker passwords are encrypted with AES-256-GCM before they are written. The key
-is generated on first run and kept in `~/.rmq-cli/key`, also at `0600`; settings
-carrying a plaintext password from an older version are re-encrypted the next
-time `rmq` starts. This guards against casual disclosure: a synced dotfile
-directory, a home backup, a `cat settings.json` over someone's shoulder. It is
-not a defence against an attacker who can already read your home directory,
-since the key sits beside the data.
+Broker passwords are AES-256-GCM encrypted. The key is generated on first run at `~/.rmq-cli/key`. Back up `key` alongside `settings.json`.
 
-Back up `key` alongside `settings.json`: without it the stored passwords cannot
-be recovered. A connection whose password fails to decrypt still appears in the
-list, with an empty password to re-enter.
-
-Diagnostics go to `~/.rmq-cli/rmq-cli.log`; `RMQ_LOG_LEVEL` accepts `debug`,
-`info`, `warn`, or `error`. Nothing is ever logged to stdout, because Ink owns the
-screen, and a stray write corrupts the frame.
+Logs go to `~/.rmq-cli/rmq-cli.log`. Set `RMQ_LOG_LEVEL` to `debug`, `info`, `warn`, or `error`.
 
 ## Development
 
 ```bash
-pnpm run dev        # run from source
-pnpm test           # unit and component tests
-pnpm run typecheck  # tsc --noEmit
-pnpm run build      # compile to dist/
+git clone https://github.com/joaoseidel/rmq-cli.git && cd rmq-cli
+pnpm install
+pnpm run dev          # run from source
+pnpm test             # unit and component tests
+pnpm run typecheck    # tsc --noEmit
+pnpm run build        # compile to dist/
 ```
 
-CI runs the same three checks on Node 20 and current LTS for every push and pull
-request. Releases are cut manually with the **Create Semantic Release** workflow,
-which derives the version from the commit history, updates `CHANGELOG.md` and
-`package.json`, and attaches a packed tarball to the GitHub release. It does not
-publish to the npm registry; flip `npmPublish` in `.releaserc.json` and add an
-`NPM_TOKEN` if you want that.
-
-A RabbitMQ instance with sample data is available for local work:
+A local RabbitMQ instance with sample data:
 
 ```bash
 docker compose -f .docker-compose/dev-stack.yml up -d
 ```
 
-It listens on 5672 (AMQP) and 15672 (management), with `rabbitmq`/`rabbitmq` as
-the credentials.
+Listens on 5672 (AMQP) and 15672 (management), credentials `rabbitmq` / `rabbitmq`.
 
-### Layout
+The seed populates the default vhost with 19 queues of realistic e-commerce data: orders, payments, shipping, notifications, inventory, audit, analytics, and users. Dead-letter queues with DLX exchanges catch failed messages.
+
+### Project structure
 
 ```
 src/
-├── bin/rmq.tsx        entry point: alternate screen buffer, render, restore
-├── container.ts       dependency wiring, and the seam for test doubles
+├── bin/rmq.tsx        entry point
+├── container.ts       dependency wiring
 ├── core/              broker-agnostic domain logic
-│   ├── domain/        message ids, connections, queues, operation results
-│   ├── ports/         interfaces the adapters implement
-│   ├── usecase/       what the app can do, independent of transport and UI
-│   └── util/          glob matching, text helpers, file logger
+│   ├── domain/        value objects and types
+│   ├── ports/         adapter interfaces
+│   ├── usecase/       application operations
+│   └── util/          helpers
 ├── adapters/
-│   ├── rabbitmq/      AMQP and management-API clients behind one interface
-│   └── storage/       JSON-backed settings, connection registry, backup log
+│   ├── rabbitmq/      AMQP and management API clients
+│   └── storage/       settings, connection registry, backup log
 └── ui/
     ├── components/
-    │   ├── common/    input primitives: select, text field, form, confirm
-    │   ├── parts/     reusable pieces: table, spinner, frame, palette
+    │   ├── common/    input primitives
+    │   ├── parts/     reusable pieces (table, spinner, frame)
     │   └── screens/   one file per full-screen view
-    ├── hooks/         terminal size, async state, list navigation, key input
-    ├── actions.ts     what the action list offers, and when
-    ├── screens.ts     the screen union and its parameters
-    └── theme.ts       colour roles and glyphs
+    ├── hooks/         terminal size, async state, key input
+    ├── actions.ts     action list definitions
+    ├── screens.ts     screen union and parameters
+    └── theme.ts       colours and glyphs
 ```
 
-The dependency rule is one-directional: `ui` and `adapters` both depend on
-`core`, and `core` depends on neither. Swapping the broker client or the storage
-backend means implementing a port in `src/core/ports/` and changing one line in
-`container.ts`.
-
-### A note on `useKeyHandler`
-
-Use `src/ui/hooks/use-key-handler.ts` rather than Ink's `useInput` directly.
-
-Ink subscribes its keypress listener in an effect keyed only on `isActive`, so
-the callback it retains is the one from the render where the subscription
-happened; every later closure, and every piece of state it reads, is ignored.
-In practice a text field reads back its initial empty value on each keystroke and
-a list acts on whichever row was selected when the screen first appeared.
-`useKeyHandler` routes through a ref, so handlers always see the current render's
-values. `test/text-input.test.tsx` covers the regression.
+Dependency rule: `ui` and `adapters` depend on `core`; `core` depends on neither.
 
 ## License
 
-Apache 2.0, see `LICENSE`.
+[Apache 2.0](LICENSE)
 
 ## Contributing
 
-Pull requests welcome. Please keep `npm run typecheck` and `npm test` green.
+Pull requests welcome. Keep `pnpm run typecheck` and `pnpm test` green.

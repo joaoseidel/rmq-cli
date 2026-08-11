@@ -1,8 +1,8 @@
 {
-  "rabbit_version": "3.12.12",
-  "rabbitmq_version": "3.12.12",
+  "rabbit_version": "3.13.0",
+  "rabbitmq_version": "3.13.0",
   "product_name": "RabbitMQ",
-  "product_version": "3.12.12",
+  "product_version": "3.13.0",
   "users": [
     {
       "name": "rabbitmq",
@@ -13,17 +13,8 @@
     }
   ],
   "vhosts": [
-    {
-      "name": "/"
-    },
-    {
-      "name": "teste-one",
-      "description": "Test virtual host one"
-    },
-    {
-      "name": "teste-two",
-      "description": "Test virtual host two"
-    }
+    { "name": "/" },
+    { "name": "staging", "description": "Staging environment" }
   ],
   "permissions": [
     {
@@ -35,14 +26,7 @@
     },
     {
       "user": "rabbitmq",
-      "vhost": "teste-one",
-      "configure": ".*",
-      "write": ".*",
-      "read": ".*"
-    },
-    {
-      "user": "rabbitmq",
-      "vhost": "teste-two",
+      "vhost": "staging",
       "configure": ".*",
       "write": ".*",
       "read": ".*"
@@ -50,90 +34,183 @@
   ],
   "queues": [
     {
-      "name": "test-queue",
+      "name": "orders.new",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-queue-type": "classic"
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "dlx.orders",
+        "x-dead-letter-routing-key": "orders.failed"
       }
     },
     {
-      "name": "test-queue-2",
+      "name": "orders.processing",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-queue-type": "classic"
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "dlx.orders",
+        "x-dead-letter-routing-key": "orders.failed"
       }
     },
     {
-      "name": "order-processing",
+      "name": "orders.completed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "orders.failed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "payments.process",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-queue-type": "classic"
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "dlx.payments",
+        "x-dead-letter-routing-key": "payments.failed"
       }
     },
     {
-      "name": "order-failed",
+      "name": "payments.completed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "payments.failed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "shipping.outbound",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-queue-type": "classic"
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "dlx.shipping",
+        "x-dead-letter-routing-key": "shipping.failed"
       }
     },
     {
-      "name": "user-events",
+      "name": "shipping.completed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "shipping.failed",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "notifications.email",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "notifications.push",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "notifications.sms",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "inventory.updates",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "inventory.reservations",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-queue-type": "classic"
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "dlx.inventory",
+        "x-dead-letter-routing-key": "inventory.expired"
       }
     },
     {
-      "name": "test-queue",
-      "vhost": "teste-one",
+      "name": "inventory.expired",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-queue-type": "classic"
-      }
+      "arguments": { "x-queue-type": "classic" }
     },
     {
-      "name": "error-queue",
-      "vhost": "teste-one",
+      "name": "audit.log",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-queue-type": "classic"
-      }
+      "arguments": { "x-queue-type": "classic" }
     },
     {
-      "name": "test-queue",
-      "vhost": "teste-two",
+      "name": "analytics.events",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-queue-type": "classic"
-      }
+      "arguments": { "x-queue-type": "classic" }
     },
     {
-      "name": "notification-queue",
-      "vhost": "teste-two",
+      "name": "users.events",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-queue-type": "classic"
-      }
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "staging.orders",
+      "vhost": "staging",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "staging.payments",
+      "vhost": "staging",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
+    },
+    {
+      "name": "staging.notifications",
+      "vhost": "staging",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "classic" }
     }
   ],
   "exchanges": [
     {
-      "name": "order-exchange",
+      "name": "exchange.orders",
       "vhost": "/",
       "type": "topic",
       "durable": true,
@@ -142,7 +219,7 @@
       "arguments": {}
     },
     {
-      "name": "user-exchange",
+      "name": "exchange.payments",
       "vhost": "/",
       "type": "topic",
       "durable": true,
@@ -151,8 +228,35 @@
       "arguments": {}
     },
     {
-      "name": "error-exchange",
-      "vhost": "teste-one",
+      "name": "exchange.shipping",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "exchange.notifications",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "exchange.inventory",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "exchange.users",
+      "vhost": "/",
       "type": "fanout",
       "durable": true,
       "auto_delete": false,
@@ -160,8 +264,53 @@
       "arguments": {}
     },
     {
-      "name": "notification-exchange",
-      "vhost": "teste-two",
+      "name": "exchange.analytics",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dlx.orders",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dlx.payments",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dlx.shipping",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dlx.inventory",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "staging.exchange",
+      "vhost": "staging",
       "type": "topic",
       "durable": true,
       "auto_delete": false,
@@ -171,41 +320,169 @@
   ],
   "bindings": [
     {
-      "source": "order-exchange",
+      "source": "exchange.orders",
       "vhost": "/",
-      "destination": "order-processing",
+      "destination": "orders.new",
       "destination_type": "queue",
       "routing_key": "order.created",
       "arguments": {}
     },
     {
-      "source": "order-exchange",
+      "source": "exchange.orders",
       "vhost": "/",
-      "destination": "order-failed",
+      "destination": "orders.processing",
       "destination_type": "queue",
-      "routing_key": "order.failed",
+      "routing_key": "order.processing",
       "arguments": {}
     },
     {
-      "source": "user-exchange",
+      "source": "exchange.orders",
       "vhost": "/",
-      "destination": "user-events",
+      "destination": "orders.completed",
       "destination_type": "queue",
-      "routing_key": "user.#",
+      "routing_key": "order.completed",
       "arguments": {}
     },
     {
-      "source": "error-exchange",
-      "vhost": "teste-one",
-      "destination": "error-queue",
+      "source": "exchange.payments",
+      "vhost": "/",
+      "destination": "payments.process",
+      "destination_type": "queue",
+      "routing_key": "payment.process",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.payments",
+      "vhost": "/",
+      "destination": "payments.completed",
+      "destination_type": "queue",
+      "routing_key": "payment.completed",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.shipping",
+      "vhost": "/",
+      "destination": "shipping.outbound",
+      "destination_type": "queue",
+      "routing_key": "shipping.dispatch",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.shipping",
+      "vhost": "/",
+      "destination": "shipping.completed",
+      "destination_type": "queue",
+      "routing_key": "shipping.delivered",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.notifications",
+      "vhost": "/",
+      "destination": "notifications.email",
+      "destination_type": "queue",
+      "routing_key": "notification.email",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.notifications",
+      "vhost": "/",
+      "destination": "notifications.push",
+      "destination_type": "queue",
+      "routing_key": "notification.push",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.notifications",
+      "vhost": "/",
+      "destination": "notifications.sms",
+      "destination_type": "queue",
+      "routing_key": "notification.sms",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.inventory",
+      "vhost": "/",
+      "destination": "inventory.updates",
+      "destination_type": "queue",
+      "routing_key": "inventory.updated",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.inventory",
+      "vhost": "/",
+      "destination": "inventory.reservations",
+      "destination_type": "queue",
+      "routing_key": "inventory.reserve",
+      "arguments": {}
+    },
+    {
+      "source": "exchange.users",
+      "vhost": "/",
+      "destination": "users.events",
       "destination_type": "queue",
       "routing_key": "",
       "arguments": {}
     },
     {
-      "source": "notification-exchange",
-      "vhost": "teste-two",
-      "destination": "notification-queue",
+      "source": "exchange.analytics",
+      "vhost": "/",
+      "destination": "analytics.events",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.orders",
+      "vhost": "/",
+      "destination": "orders.failed",
+      "destination_type": "queue",
+      "routing_key": "orders.failed",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.payments",
+      "vhost": "/",
+      "destination": "payments.failed",
+      "destination_type": "queue",
+      "routing_key": "payments.failed",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.shipping",
+      "vhost": "/",
+      "destination": "shipping.failed",
+      "destination_type": "queue",
+      "routing_key": "shipping.failed",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.inventory",
+      "vhost": "/",
+      "destination": "inventory.expired",
+      "destination_type": "queue",
+      "routing_key": "inventory.expired",
+      "arguments": {}
+    },
+    {
+      "source": "staging.exchange",
+      "vhost": "staging",
+      "destination": "staging.orders",
+      "destination_type": "queue",
+      "routing_key": "order.#",
+      "arguments": {}
+    },
+    {
+      "source": "staging.exchange",
+      "vhost": "staging",
+      "destination": "staging.payments",
+      "destination_type": "queue",
+      "routing_key": "payment.#",
+      "arguments": {}
+    },
+    {
+      "source": "staging.exchange",
+      "vhost": "staging",
+      "destination": "staging.notifications",
       "destination_type": "queue",
       "routing_key": "notification.#",
       "arguments": {}

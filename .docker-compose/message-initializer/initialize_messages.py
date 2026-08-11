@@ -2,672 +2,617 @@
 """
 RabbitMQ Message Initializer
 
-This script connects to RabbitMQ and publishes a variety of predefined messages
-with different combinations of AMQP properties to help test the RMQ-CLI tool
-against messages with diverse property sets.
+Seeds a RabbitMQ instance with realistic e-commerce messages for development
+and demonstration of rmq-cli.
 """
 
 import json
 import time
 import logging
-import pika
-import requests
-from requests.auth import HTTPBasicAuth
-from datetime import datetime, timedelta
+import random
 import uuid
-import base64
-import gzip
+from datetime import datetime, timedelta, timezone
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("message-initializer")
+import pika
+from pika import BasicProperties
 
-# Connection parameters
-RABBITMQ_HOST = 'rabbitmq'
-RABBITMQ_PORT = 5672
-RABBITMQ_HTTP_PORT = 15672
-RABBITMQ_USERNAME = 'rabbitmq'
-RABBITMQ_PASSWORD = 'rabbitmq'
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+log = logging.getLogger("seed")
 
-# List of vhosts to initialize
-VHOSTS = ['/', 'teste-one', 'teste-two']
+HOST = "rabbitmq"
+PORT = 5672
+USER = "rabbitmq"
+PASS = "rabbitmq"
 
-# HTTP API endpoint
-RABBITMQ_API_URL = f'http://{RABBITMQ_HOST}:{RABBITMQ_HTTP_PORT}/api'
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-def connect_to_rabbitmq(vhost='/'):
-    """Establish connection to RabbitMQ with the specified vhost"""
-    connection_params = pika.ConnectionParameters(
-        host=RABBITMQ_HOST,
-        port=RABBITMQ_PORT,
+def connect(vhost="/"):
+    creds = pika.PlainCredentials(USER, PASS)
+    params = pika.ConnectionParameters(
+        host=HOST,
+        port=PORT,
         virtual_host=vhost,
-        credentials=pika.PlainCredentials(RABBITMQ_USERNAME, RABBITMQ_PASSWORD),
+        credentials=creds,
         heartbeat=600,
         connection_attempts=5,
-        retry_delay=5
+        retry_delay=5,
     )
+    conn = pika.BlockingConnection(params)
+    return conn, conn.channel()
 
-    connection = pika.BlockingConnection(connection_params)
-    channel = connection.channel()
-    return connection, channel
 
-def wait_for_rabbitmq():
-    """Wait until RabbitMQ is available"""
-    max_retries = 30
-    retry_interval = 5
-
-    for attempt in range(max_retries):
+def wait_for_rabbit():
+    for i in range(30):
         try:
-            # Try to connect to the default vhost
-            connection, _ = connect_to_rabbitmq()
-            connection.close()
-            logger.info("RabbitMQ is available!")
+            c, _ = connect()
+            c.close()
+            log.info("RabbitMQ is ready")
             return True
-        except Exception as e:
-            logger.warning(f"Waiting for RabbitMQ to be available... Attempt {attempt+1}/{max_retries}")
-            time.sleep(retry_interval)
-
-    logger.error("Could not connect to RabbitMQ after multiple attempts")
+        except Exception:
+            log.info("Waiting for RabbitMQ... (%d/30)", i + 1)
+            time.sleep(3)
+    log.error("RabbitMQ did not become ready")
     return False
 
-def ensure_vhosts_exist():
-    """Make sure all required virtual hosts exist, creating them if necessary"""
-    logger.info("Ensuring all virtual hosts exist")
 
-    # First check which vhosts already exist
-    try:
-        response = requests.get(
-            f"{RABBITMQ_API_URL}/vhosts",
-            auth=HTTPBasicAuth(RABBITMQ_USERNAME, RABBITMQ_PASSWORD)
-        )
-        response.raise_for_status()
+def iso(dt):
+    return dt.isoformat()
 
-        existing_vhosts = [vhost['name'] for vhost in response.json()]
-        logger.info(f"Found existing vhosts: {existing_vhosts}")
 
-        # Create any missing vhosts
-        for vhost in VHOSTS:
-            if vhost not in existing_vhosts:
-                logger.info(f"Creating missing vhost: {vhost}")
+NOW = datetime.now(timezone.utc)
 
-                # Create the vhost via API
-                create_response = requests.put(
-                    f"{RABBITMQ_API_URL}/vhosts/{vhost}",
-                    auth=HTTPBasicAuth(RABBITMQ_USERNAME, RABBITMQ_PASSWORD),
-                    json={"description": f"Created by message initializer"}
-                )
-                create_response.raise_for_status()
 
-                # Set permissions for the rabbitmq user on this vhost
-                perm_response = requests.put(
-                    f"{RABBITMQ_API_URL}/permissions/{vhost}/rabbitmq",
-                    auth=HTTPBasicAuth(RABBITMQ_USERNAME, RABBITMQ_PASSWORD),
-                    json={"configure": ".*", "write": ".*", "read": ".*"}
-                )
-                perm_response.raise_for_status()
+def ts(dt):
+    return int(dt.timestamp())
 
-                logger.info(f"Successfully created vhost: {vhost}")
 
-        return True
-    except Exception as e:
-        logger.error(f"Error ensuring vhosts exist: {e}")
+def uid():
+    return str(uuid.uuid4())
 
-        # Fall back to rabbitmqctl commands via direct connection
-        try:
-            logger.info("Attempting to create vhosts using direct connection...")
-            connection, channel = connect_to_rabbitmq()
-            for vhost in VHOSTS:
-                if vhost != '/':  # Skip default vhost as it always exists
-                    logger.info(f"Trying direct method to create vhost: {vhost}")
-                    # We can't directly create a vhost through AMQP, but we can try to connect to it
-                    # If it fails, we'll handle it in the initialization process
-            connection.close()
-        except Exception as inner_e:
-            logger.error(f"Direct vhost creation attempt also failed: {inner_e}")
 
-        return False
+# ---------------------------------------------------------------------------
+# Payload factories
+# ---------------------------------------------------------------------------
 
-def create_standard_messages(channel, queue_name):
-    """Publish standard test messages with basic properties"""
+CUSTOMERS = [
+    {"id": "CUST-1001", "name": "Acme Corp", "email": "orders@acme.example"},
+    {"id": "CUST-1002", "name": "Globex", "email": "buy@globex.example"},
+    {"id": "CUST-1003", "name": "Initech", "email": "procurement@initech.example"},
+    {"id": "CUST-1004", "name": "Umbrella Inc", "email": "supply@umbrella.example"},
+    {"id": "CUST-1005", "name": "Wayne Enterprises", "email": "ops@wayne.example"},
+]
 
-    # Basic JSON message
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"messageType": "standard", "content": "Simple JSON message"}).encode(),
-        properties=pika.BasicProperties(
-            content_type='application/json',
-            delivery_mode=2  # persistent
-        )
-    )
+PRODUCTS = [
+    {"sku": "WIDGET-A1", "name": "Widget A", "price": 29.99},
+    {"sku": "GADGET-B2", "name": "Gadget B", "price": 49.99},
+    {"sku": "DOODAD-C3", "name": "Doodad C", "price": 14.50},
+    {"sku": "THINGY-D4", "name": "Thingy D", "price": 99.00},
+    {"sku": "WHATSIT-E5", "name": "Whatsit E", "price": 7.25},
+]
 
-    # Plain text message
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body="This is a plain text message".encode(),
-        properties=pika.BasicProperties(
-            content_type='text/plain',
-            delivery_mode=1  # non-persistent
-        )
-    )
 
-    # XML message
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body='<message><type>standard</type><content>XML test message</content></message>'.encode(),
-        properties=pika.BasicProperties(
-            content_type='application/xml',
-            delivery_mode=2
-        )
-    )
+def random_customer():
+    return random.choice(CUSTOMERS)
 
-def create_messages_with_all_properties(channel, queue_name):
-    """Publish messages with all possible AMQP properties"""
 
-    # Message with all standard properties
-    message_id = str(uuid.uuid4())
-    correlation_id = str(uuid.uuid4())
+def random_items(n=None):
+    if n is None:
+        n = random.randint(1, 4)
+    items = []
+    for _ in range(n):
+        p = random.choice(PRODUCTS)
+        qty = random.randint(1, 10)
+        items.append({
+            "sku": p["sku"],
+            "name": p["name"],
+            "quantity": qty,
+            "unit_price": p["price"],
+            "line_total": round(p["price"] * qty, 2),
+        })
+    return items
 
-    # Create a message with a subset of properties that are more reliably supported
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({
-            "messageType": "complete",
-            "id": message_id,
-            "description": "Message with all AMQP properties set"
-        }).encode(),
-        properties=pika.BasicProperties(
-            content_type='application/json',
-            content_encoding='utf-8',
-            headers={
-                'custom-header-1': 'value1',
-                'custom-header-2': 'value2',
-                # Nested array structures might not be fully supported across all clients
-                # so we use simple headers for better compatibility
-                'x-death-count': 1,
-                'x-death-reason': 'rejected',
-                'x-first-death-exchange': '',
-                'x-first-death-queue': 'some-queue',
+
+def order_id():
+    return f"ORD-{random.randint(10000, 99999)}"
+
+
+def payment_id():
+    return f"PAY-{random.randint(10000, 99999)}"
+
+
+def tracking_id():
+    return f"TRK-{random.randint(100000, 999999)}"
+
+
+# ---------------------------------------------------------------------------
+# Order messages
+# ---------------------------------------------------------------------------
+
+def new_order_event():
+    oid = order_id()
+    cust = random_customer()
+    items = random_items()
+    total = sum(i["line_total"] for i in items)
+    return {
+        "event": "order.created",
+        "order_id": oid,
+        "customer": cust,
+        "items": items,
+        "total": round(total, 2),
+        "currency": "USD",
+        "created_at": iso(NOW),
+    }
+
+
+def order_processing_event():
+    oid = order_id()
+    return {
+        "event": "order.processing",
+        "order_id": oid,
+        "started_at": iso(NOW),
+        "assigned_worker": f"worker-{random.randint(1, 8)}",
+    }
+
+
+def order_completed_event():
+    oid = order_id()
+    return {
+        "event": "order.completed",
+        "order_id": oid,
+        "completed_at": iso(NOW),
+        "items_shipped": random.randint(1, 5),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Payment messages
+# ---------------------------------------------------------------------------
+
+def payment_process_event():
+    pid = payment_id()
+    oid = order_id()
+    return {
+        "event": "payment.process",
+        "payment_id": pid,
+        "order_id": oid,
+        "amount": round(random.uniform(15.0, 500.0), 2),
+        "currency": "USD",
+        "method": random.choice(["credit_card", "debit_card", "paypal", "wire_transfer"]),
+        "initiated_at": iso(NOW),
+    }
+
+
+def payment_completed_event():
+    pid = payment_id()
+    return {
+        "event": "payment.completed",
+        "payment_id": pid,
+        "authorized_at": iso(NOW),
+        "auth_code": f"AUTH-{random.randint(1000, 9999)}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Shipping messages
+# ---------------------------------------------------------------------------
+
+def shipping_dispatch_event():
+    oid = order_id()
+    tid = tracking_id()
+    return {
+        "event": "shipping.dispatch",
+        "order_id": oid,
+        "tracking_id": tid,
+        "carrier": random.choice(["FedEx", "UPS", "DHL", "USPS"]),
+        "service": random.choice(["standard", "express", "overnight"]),
+        "estimated_delivery": iso(NOW + timedelta(days=random.randint(1, 7))),
+        "dispatched_at": iso(NOW),
+    }
+
+
+def shipping_delivered_event():
+    tid = tracking_id()
+    return {
+        "event": "shipping.delivered",
+        "tracking_id": tid,
+        "delivered_at": iso(NOW),
+        "signed_by": random.choice(["J. Smith", "front desk", "neighbor", "left at door"]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Notification messages
+# ---------------------------------------------------------------------------
+
+def email_notification():
+    return {
+        "channel": "email",
+        "to": random_customer()["email"],
+        "subject": random.choice([
+            "Order confirmed",
+            "Payment received",
+            "Your order has shipped",
+            "Delivery complete",
+            "Password reset request",
+        ]),
+        "from": "noreply@shop.example",
+        "body_preview": "This is a transactional email notification...",
+        "template_id": random.choice(["order-confirmation", "shipping-update", "payment-receipt"]),
+        "sent_at": iso(NOW),
+    }
+
+
+def push_notification():
+    return {
+        "channel": "push",
+        "device_token": uid(),
+        "title": random.choice([
+            "Order update",
+            "Payment processed",
+            "Shipment on the way",
+            "Delivered!",
+        ]),
+        "body": "Tap to view details",
+        "badge": random.randint(1, 10),
+        "sent_at": iso(NOW),
+    }
+
+
+def sms_notification():
+    return {
+        "channel": "sms",
+        "phone": f"+1555{random.randint(1000000, 9999999)}",
+        "message": random.choice([
+            "Your order has been confirmed.",
+            "Payment of ${:.2f} processed.".format(random.uniform(10, 300)),
+            "Your package is out for delivery.",
+            "Delivered. Track: {}".format(tracking_id()),
+        ]),
+        "sent_at": iso(NOW),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Inventory messages
+# ---------------------------------------------------------------------------
+
+def inventory_update_event():
+    return {
+        "event": "inventory.updated",
+        "sku": random.choice(PRODUCTS)["sku"],
+        "warehouse": random.choice(["WH-EAST", "WH-WEST", "WH-EU"]),
+        "previous_qty": random.randint(0, 200),
+        "new_qty": random.randint(0, 200),
+        "reason": random.choice(["restock", "adjustment", "return", "cycle_count"]),
+        "updated_at": iso(NOW),
+    }
+
+
+def inventory_reserve_event():
+    oid = order_id()
+    return {
+        "event": "inventory.reserve",
+        "order_id": oid,
+        "items": [{"sku": p["sku"], "qty": random.randint(1, 5)} for p in random.sample(PRODUCTS, random.randint(1, 3))],
+        "expires_at": iso(NOW + timedelta(minutes=15)),
+        "reserved_at": iso(NOW),
+    }
+
+
+# ---------------------------------------------------------------------------
+# User / analytics
+# ---------------------------------------------------------------------------
+
+def user_event():
+    return {
+        "event": random.choice(["user.registered", "user.logged_in", "user.updated_profile", "user.password_changed"]),
+        "user_id": f"USR-{random.randint(1000, 9999)}",
+        "email": random_customer()["email"],
+        "ip": f"{random.randint(10, 192)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}",
+        "user_agent": "Mozilla/5.0",
+        "timestamp": iso(NOW),
+    }
+
+
+def analytics_event():
+    return {
+        "event_type": random.choice(["page_view", "add_to_cart", "checkout_start", "search", "product_click"]),
+        "session_id": uid(),
+        "user_id": f"USR-{random.randint(1000, 9999)}",
+        "page": random.choice(["/", "/products", "/cart", "/checkout", "/account"]),
+        "referrer": random.choice(["google", "direct", "email", "social", None]),
+        "timestamp": iso(NOW),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+def audit_event():
+    return {
+        "action": random.choice([
+            "order.status_changed",
+            "payment.refund_initiated",
+            "inventory.low_stock_warning",
+            "user.role_updated",
+            "admin.queue_purged",
+        ]),
+        "actor": f"USR-{random.randint(1000, 9999)}",
+        "details": {"ip": f"10.0.{random.randint(0, 255)}.{random.randint(1, 254)}"},
+        "severity": random.choice(["info", "warn", "error"]),
+        "timestamp": iso(NOW),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Dead-letter messages (failed orders / payments / shipping)
+# ---------------------------------------------------------------------------
+
+def failed_order():
+    return {
+        "event": "order.failed",
+        "order_id": order_id(),
+        "error": random.choice([
+            "inventory_unavailable",
+            "payment_timeout",
+            "address_validation_failed",
+            "customer_blocked",
+        ]),
+        "retry_count": random.randint(1, 3),
+        "failed_at": iso(NOW),
+    }
+
+
+def failed_payment():
+    return {
+        "event": "payment.failed",
+        "payment_id": payment_id(),
+        "order_id": order_id(),
+        "error": random.choice([
+            "card_declined",
+            "insufficient_funds",
+            "expired_card",
+            "gateway_timeout",
+            "fraud_suspected",
+        ]),
+        "amount": round(random.uniform(10, 500), 2),
+        "failed_at": iso(NOW),
+    }
+
+
+def failed_shipping():
+    return {
+        "event": "shipping.failed",
+        "order_id": order_id(),
+        "tracking_id": tracking_id(),
+        "error": random.choice([
+            "address_undeliverable",
+            "carrier_timeout",
+            "package_damaged",
+            "customs_hold",
+        ]),
+        "failed_at": iso(NOW),
+    }
+
+
+def expired_reservation():
+    return {
+        "event": "inventory.expired",
+        "order_id": order_id(),
+        "items": [{"sku": p["sku"], "qty": random.randint(1, 3)} for p in random.sample(PRODUCTS, 2)],
+        "expired_at": iso(NOW),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Infrastructure declarations
+# ---------------------------------------------------------------------------
+
+EXCHANGES = [
+    ("exchange.orders", "topic"),
+    ("exchange.payments", "topic"),
+    ("exchange.shipping", "topic"),
+    ("exchange.notifications", "topic"),
+    ("exchange.inventory", "topic"),
+    ("exchange.users", "fanout"),
+    ("exchange.analytics", "fanout"),
+    ("dlx.orders", "topic"),
+    ("dlx.payments", "topic"),
+    ("dlx.shipping", "topic"),
+    ("dlx.inventory", "topic"),
+]
+
+DEAD_LETTER_QUEUES = [
+    ("orders.failed", "dlx.orders", "orders.failed"),
+    ("payments.failed", "dlx.payments", "payments.failed"),
+    ("shipping.failed", "dlx.shipping", "shipping.failed"),
+    ("inventory.expired", "dlx.inventory", "inventory.expired"),
+]
+
+# Queues with DLX arguments
+DLX_QUEUES = [
+    ("orders.new", "dlx.orders", "orders.failed"),
+    ("orders.processing", "dlx.orders", "orders.failed"),
+    ("payments.process", "dlx.payments", "payments.failed"),
+    ("shipping.outbound", "dlx.shipping", "shipping.failed"),
+    ("inventory.reservations", "dlx.inventory", "inventory.expired"),
+]
+
+PLAIN_QUEUES = [
+    "orders.completed",
+    "payments.completed",
+    "shipping.completed",
+    "notifications.email",
+    "notifications.push",
+    "notifications.sms",
+    "inventory.updates",
+    "audit.log",
+    "analytics.events",
+    "users.events",
+]
+
+
+def declare_infrastructure(ch, exchanges, dlx_queues, plain_queues, dead_letter_queues):
+    for name, etype in exchanges:
+        ch.exchange_declare(exchange=name, exchange_type=etype, durable=True)
+    for name, dlx, rk in dlx_queues:
+        ch.queue_declare(
+            queue=name,
+            durable=True,
+            arguments={
+                "x-dead-letter-exchange": dlx,
+                "x-dead-letter-routing-key": rk,
             },
-            delivery_mode=2,  # persistent
-            priority=5,  # 0-9
-            correlation_id=correlation_id,
-            reply_to='response-queue',
-            expiration='60000',  # 60 seconds
-            message_id=message_id,
-            timestamp=int(datetime.now().timestamp()),
-            type='test.message',
-            # user_id must match the authenticated user connecting to RabbitMQ
-            user_id='rabbitmq',
-            app_id='message-initializer',
-            # cluster_id is deprecated in newer AMQP versions, so we skip it
         )
+    for name in plain_queues:
+        ch.queue_declare(queue=name, durable=True)
+    for name, dlx, rk in dead_letter_queues:
+        ch.queue_declare(queue=name, durable=True)
+        ch.queue_bind(queue=name, exchange=dlx, routing_key=rk)
+    for name, etype in exchanges:
+        # Bind queues that use direct publish (no routing through exchanges)
+        pass
+
+
+def declare_main_bindings(ch):
+    bindings = [
+        ("exchange.orders", "orders.new", "order.created"),
+        ("exchange.orders", "orders.processing", "order.processing"),
+        ("exchange.orders", "orders.completed", "order.completed"),
+        ("exchange.payments", "payments.process", "payment.process"),
+        ("exchange.payments", "payments.completed", "payment.completed"),
+        ("exchange.shipping", "shipping.outbound", "shipping.dispatch"),
+        ("exchange.shipping", "shipping.completed", "shipping.delivered"),
+        ("exchange.notifications", "notifications.email", "notification.email"),
+        ("exchange.notifications", "notifications.push", "notification.push"),
+        ("exchange.notifications", "notifications.sms", "notification.sms"),
+        ("exchange.inventory", "inventory.updates", "inventory.updated"),
+        ("exchange.inventory", "inventory.reservations", "inventory.reserve"),
+    ]
+    for exchange, queue, routing_key in bindings:
+        ch.queue_bind(queue=queue, exchange=exchange, routing_key=routing_key)
+    # Fanout exchanges bind with empty routing key
+    ch.queue_bind(queue="users.events", exchange="exchange.users", routing_key="")
+    ch.queue_bind(queue="analytics.events", exchange="exchange.analytics", routing_key="")
+
+
+def declare_staging_infrastructure(ch):
+    ch.exchange_declare(exchange="staging.exchange", exchange_type="topic", durable=True)
+    for q in ["staging.orders", "staging.payments", "staging.notifications"]:
+        ch.queue_declare(queue=q, durable=True)
+    ch.queue_bind(queue="staging.orders", exchange="staging.exchange", routing_key="order.#")
+    ch.queue_bind(queue="staging.payments", exchange="staging.exchange", routing_key="payment.#")
+    ch.queue_bind(queue="staging.notifications", exchange="staging.exchange", routing_key="notification.#")
+
+
+# ---------------------------------------------------------------------------
+# Seed logic
+# ---------------------------------------------------------------------------
+
+def seed_queue(ch, queue, payload, routing_key="", exchange="", props=None):
+    body = json.dumps(payload).encode()
+    ch.basic_publish(
+        exchange=exchange,
+        routing_key=routing_key or queue,
+        body=body,
+        properties=props or BasicProperties(
+            content_type="application/json",
+            delivery_mode=2,
+            message_id=uid(),
+            timestamp=ts(NOW),
+            app_id="rmq-dev-seed",
+        ),
     )
 
-    # Message with binary content and gzip encoding
-    try:
-        binary_data = b'Some binary data with \x00\x01\x02\x03 bytes'
-        compressed_data = gzip.compress(binary_data)
 
-        channel.basic_publish(
-            exchange='',
-            routing_key=queue_name,
-            body=compressed_data,
-            properties=pika.BasicProperties(
-                content_type='application/octet-stream',
-                content_encoding='gzip',
-                headers={'original-size': str(len(binary_data))},  # Convert to string to ensure compatibility
-                delivery_mode=2
-            )
-        )
-    except Exception as e:
-        logger.warning(f"Could not publish binary message: {e}")
-        # Fallback to a simpler message
-        channel.basic_publish(
-            exchange='',
-            routing_key=queue_name,
-            body=b'Binary data placeholder',
-            properties=pika.BasicProperties(
-                content_type='application/octet-stream',
-                delivery_mode=2
-            )
-        )
+def seed_main_vhost(ch):
+    # --- Orders ---
+    for _ in range(8):
+        seed_queue(ch, "orders.new", new_order_event(), "order.created", "exchange.orders")
+    for _ in range(5):
+        seed_queue(ch, "orders.processing", order_processing_event(), "order.processing", "exchange.orders")
+    for _ in range(12):
+        seed_queue(ch, "orders.completed", order_completed_event(), "order.completed", "exchange.orders")
+    for _ in range(3):
+        seed_queue(ch, "orders.failed", failed_order())
 
-    # Message with Base64 encoded content
-    try:
-        channel.basic_publish(
-            exchange='',
-            routing_key=queue_name,
-            body=base64.b64encode(json.dumps({"key": "value"}).encode()),
-            properties=pika.BasicProperties(
-                content_type='application/json',
-                content_encoding='base64',
-                headers={'encoding': 'base64'}
-            )
-        )
-    except Exception as e:
-        logger.warning(f"Could not publish base64 encoded message: {e}")
-        # Fallback to a plain message
-        channel.basic_publish(
-            exchange='',
-            routing_key=queue_name,
-            body=json.dumps({"key": "value", "encoding": "none"}).encode(),
-            properties=pika.BasicProperties(
-                content_type='application/json'
-            )
-        )
+    # --- Payments ---
+    for _ in range(6):
+        seed_queue(ch, "payments.process", payment_process_event(), "payment.process", "exchange.payments")
+    for _ in range(9):
+        seed_queue(ch, "payments.completed", payment_completed_event(), "payment.completed", "exchange.payments")
+    for _ in range(4):
+        seed_queue(ch, "payments.failed", failed_payment())
 
-def create_messages_with_custom_headers(channel, queue_name):
-    """Publish messages with various custom headers"""
+    # --- Shipping ---
+    for _ in range(4):
+        seed_queue(ch, "shipping.outbound", shipping_dispatch_event(), "shipping.dispatch", "exchange.shipping")
+    for _ in range(7):
+        seed_queue(ch, "shipping.completed", shipping_delivered_event(), "shipping.delivered", "exchange.shipping")
+    for _ in range(2):
+        seed_queue(ch, "shipping.failed", failed_shipping())
 
-    # Message with nested headers
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"content": "Message with nested headers"}).encode(),
-        properties=pika.BasicProperties(
-            headers={
-                'x-custom': {
-                    'nested': {
-                        'value': 123,
-                        'array': [1, 2, 3]
-                    }
-                },
-                'routing': {
-                    'region': 'us-west',
-                    'datacenter': 'dc1'
-                }
-            }
-        )
-    )
+    # --- Notifications ---
+    for _ in range(10):
+        seed_queue(ch, "notifications.email", email_notification(), "notification.email", "exchange.notifications")
+    for _ in range(6):
+        seed_queue(ch, "notifications.push", push_notification(), "notification.push", "exchange.notifications")
+    for _ in range(3):
+        seed_queue(ch, "notifications.sms", sms_notification(), "notification.sms", "exchange.notifications")
 
-    # Message with array in headers
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"content": "Message with array headers"}).encode(),
-        properties=pika.BasicProperties(
-            headers={
-                'tags': ['important', 'production', 'customer'],
-                'priorities': [1, 2, 3]
-            }
-        )
-    )
+    # --- Inventory ---
+    for _ in range(7):
+        seed_queue(ch, "inventory.updates", inventory_update_event(), "inventory.updated", "exchange.inventory")
+    for _ in range(4):
+        seed_queue(ch, "inventory.reservations", inventory_reserve_event(), "inventory.reserve", "exchange.inventory")
+    for _ in range(2):
+        seed_queue(ch, "inventory.expired", expired_reservation())
 
-    # Message with numeric and boolean headers
-    # Note: Floating point values must be converted to strings for AMQP headers
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"content": "Message with typed headers"}).encode(),
-        properties=pika.BasicProperties(
-            headers={
-                'int-value': 42,
-                'float-value-as-string': str(3.14159),  # Convert float to string
-                'boolean-true': True,
-                'boolean-false': False,
-                'null-value': None
-            }
-        )
-    )
+    # --- Users ---
+    for _ in range(5):
+        seed_queue(ch, "users.events", user_event(), "", "exchange.users")
 
-def create_messages_expiration_and_priority(channel, queue_name):
-    """Publish messages with different TTL and priority values"""
+    # --- Analytics ---
+    for _ in range(8):
+        seed_queue(ch, "analytics.events", analytics_event(), "", "exchange.analytics")
 
-    # Message that expires in 1 minute
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"content": "Short expiration (1 minute)"}).encode(),
-        properties=pika.BasicProperties(
-            expiration='60000'  # 60 seconds
-        )
-    )
+    # --- Audit ---
+    for _ in range(6):
+        seed_queue(ch, "audit.log", audit_event())
 
-    # Message that expires in 1 hour
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"content": "Medium expiration (1 hour)"}).encode(),
-        properties=pika.BasicProperties(
-            expiration='3600000'  # 1 hour
-        )
-    )
 
-    # Messages with different priorities
-    for priority in [0, 3, 5, 9]:
-        channel.basic_publish(
-            exchange='',
-            routing_key=queue_name,
-            body=json.dumps({"content": f"Message with priority {priority}"}).encode(),
-            properties=pika.BasicProperties(
-                priority=priority
-            )
-        )
+def seed_staging_vhost(ch):
+    for _ in range(3):
+        seed_queue(ch, "staging.orders", new_order_event(), "order.created", "staging.exchange")
+    for _ in range(2):
+        seed_queue(ch, "staging.payments", payment_process_event(), "payment.process", "staging.exchange")
+    for _ in range(2):
+        seed_queue(ch, "staging.notifications", email_notification(), "notification.email", "staging.exchange")
 
-def create_rpc_style_messages(channel, queue_name):
-    """Publish messages simulating request-reply pattern"""
-
-    # RPC request message
-    request_id = str(uuid.uuid4())
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({
-            "jsonrpc": "2.0",
-            "method": "getUser",
-            "params": {"userId": 123},
-            "id": request_id
-        }).encode(),
-        properties=pika.BasicProperties(
-            content_type='application/json',
-            correlation_id=request_id,
-            reply_to='response-queue',
-            type='rpc.request'
-        )
-    )
-
-    # RPC response message
-    response_id = str(uuid.uuid4())
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({
-            "jsonrpc": "2.0",
-            "result": {"userId": 123, "name": "John Doe", "email": "john@example.com"},
-            "id": request_id
-        }).encode(),
-        properties=pika.BasicProperties(
-            content_type='application/json',
-            correlation_id=request_id,
-            type='rpc.response'
-        )
-    )
-
-def create_messages_with_timestamps(channel, queue_name):
-    """Publish messages with different timestamp values"""
-
-    # Current timestamp
-    current_time = datetime.now()
-
-    # Message with current timestamp
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"event": "current", "timestamp": current_time.isoformat()}).encode(),
-        properties=pika.BasicProperties(
-            timestamp=int(current_time.timestamp())
-        )
-    )
-
-    # Message with past timestamp (1 day ago)
-    past_time = current_time - timedelta(days=1)
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"event": "past", "timestamp": past_time.isoformat()}).encode(),
-        properties=pika.BasicProperties(
-            timestamp=int(past_time.timestamp())
-        )
-    )
-
-    # Message with future timestamp (1 day from now)
-    future_time = current_time + timedelta(days=1)
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({"event": "future", "timestamp": future_time.isoformat()}).encode(),
-        properties=pika.BasicProperties(
-            timestamp=int(future_time.timestamp())
-        )
-    )
-
-def create_error_messages(channel, queue_name):
-    """Publish messages that represent different types of errors"""
-
-    # Message representing a validation error
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({
-            "error": "ValidationError",
-            "message": "Invalid input data",
-            "details": {"field": "email", "constraint": "format"}
-        }).encode(),
-        properties=pika.BasicProperties(
-            content_type='application/json',
-            type='error.validation',
-            headers={'severity': 'warning'}
-        )
-    )
-
-    # Message representing a system error
-    channel.basic_publish(
-        exchange='',
-        routing_key=queue_name,
-        body=json.dumps({
-            "error": "DatabaseError",
-            "message": "Connection pool exhausted",
-            "stackTrace": "..."
-        }).encode(),
-        properties=pika.BasicProperties(
-            content_type='application/json',
-            type='error.system',
-            headers={'severity': 'critical'}
-        )
-    )
-
-def initialize_vhost(vhost):
-    """Initialize a specific vhost with test messages"""
-    logger.info(f"Initializing vhost: {vhost}")
-
-    try:
-        connection, channel = connect_to_rabbitmq(vhost)
-    except Exception as e:
-        logger.error(f"Failed to connect to vhost {vhost}: {e}")
-        # Try to create the vhost using the HTTP API if it doesn't exist
-        try:
-            create_response = requests.put(
-                f"{RABBITMQ_API_URL}/vhosts/{vhost}",
-                auth=HTTPBasicAuth(RABBITMQ_USERNAME, RABBITMQ_PASSWORD),
-                json={"description": f"Created by message initializer during initialization"}
-            )
-            create_response.raise_for_status()
-
-            # Set permissions for the rabbitmq user on this vhost
-            perm_response = requests.put(
-                f"{RABBITMQ_API_URL}/permissions/{vhost}/rabbitmq",
-                auth=HTTPBasicAuth(RABBITMQ_USERNAME, RABBITMQ_PASSWORD),
-                json={"configure": ".*", "write": ".*", "read": ".*"}
-            )
-            perm_response.raise_for_status()
-
-            logger.info(f"Created vhost {vhost} on-the-fly, now connecting...")
-
-            # Wait a moment for the vhost to be ready
-            time.sleep(2)
-
-            # Try connecting again
-            connection, channel = connect_to_rabbitmq(vhost)
-        except Exception as inner_e:
-            logger.error(f"Failed to create vhost {vhost}: {inner_e}")
-            raise
-
-    try:
-        # Define test queues if they don't already exist
-        if vhost == '/':
-            test_queues = ['test-queue', 'test-queue-2', 'order-processing', 'order-failed', 'user-events']
-            exchanges = [('order-exchange', 'topic'), ('user-exchange', 'topic')]
-        elif vhost == 'teste-one':
-            test_queues = ['test-queue', 'error-queue']
-            exchanges = [('error-exchange', 'fanout')]
-        elif vhost == 'teste-two':
-            test_queues = ['test-queue', 'notification-queue']
-            exchanges = [('notification-exchange', 'topic')]
-
-        # Ensure queues exist
-        for queue in test_queues:
-            channel.queue_declare(queue=queue, durable=True)
-
-        # Ensure exchanges exist
-        for exchange, exchange_type in exchanges:
-            channel.exchange_declare(exchange=exchange, exchange_type=exchange_type, durable=True)
-
-        # Publish messages to each queue
-        for queue in test_queues:
-            try:
-                # Publish various types of test messages
-                create_standard_messages(channel, queue)
-                logger.debug(f"Created standard messages for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating standard messages for queue {queue}: {e}")
-
-            try:
-                create_messages_with_all_properties(channel, queue)
-                logger.debug(f"Created messages with all properties for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating messages with all properties for queue {queue}: {e}")
-
-            try:
-                create_messages_with_custom_headers(channel, queue)
-                logger.debug(f"Created messages with custom headers for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating messages with custom headers for queue {queue}: {e}")
-
-            try:
-                create_messages_expiration_and_priority(channel, queue)
-                logger.debug(f"Created messages with expiration and priority for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating messages with expiration and priority for queue {queue}: {e}")
-
-            try:
-                create_rpc_style_messages(channel, queue)
-                logger.debug(f"Created RPC style messages for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating RPC style messages for queue {queue}: {e}")
-
-            try:
-                create_messages_with_timestamps(channel, queue)
-                logger.debug(f"Created messages with timestamps for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating messages with timestamps for queue {queue}: {e}")
-
-            try:
-                create_error_messages(channel, queue)
-                logger.debug(f"Created error messages for queue: {queue}")
-            except Exception as e:
-                logger.error(f"Error creating error messages for queue {queue}: {e}")
-
-            logger.info(f"Published test messages to queue: {queue}")
-
-        # Create some messages for specific use cases in exchanges
-        try:
-            if vhost == '/':
-                # Order messages
-                channel.basic_publish(
-                    exchange='order-exchange',
-                    routing_key='order.created',
-                    body=json.dumps({
-                        "orderId": "ORD-100",
-                        "customer": "CUST-200",
-                        "items": [{"productId": "PROD-1", "quantity": 2}]
-                    }).encode(),
-                    properties=pika.BasicProperties(content_type='application/json')
-                )
-
-                channel.basic_publish(
-                    exchange='order-exchange',
-                    routing_key='order.failed',
-                    body=json.dumps({
-                        "orderId": "ORD-101",
-                        "reason": "payment_failed",
-                        "errorCode": "ERR-501"
-                    }).encode(),
-                    properties=pika.BasicProperties(content_type='application/json')
-                )
-
-                # User messages
-                channel.basic_publish(
-                    exchange='user-exchange',
-                    routing_key='user.created',
-                    body=json.dumps({
-                        "userId": "USER-100",
-                        "email": "user@example.com"
-                    }).encode(),
-                    properties=pika.BasicProperties(content_type='application/json')
-                )
-
-            elif vhost == 'teste-one':
-                # Error messages
-                channel.basic_publish(
-                    exchange='error-exchange',
-                    routing_key='',  # Fanout exchange doesn't need routing key
-                    body=json.dumps({
-                        "service": "payment-service",
-                        "errorCode": "ERR-101",
-                        "message": "Payment gateway timeout"
-                    }).encode(),
-                    properties=pika.BasicProperties(content_type='application/json')
-                )
-
-            elif vhost == 'teste-two':
-                # Notification messages
-                channel.basic_publish(
-                    exchange='notification-exchange',
-                    routing_key='notification.email',
-                    body=json.dumps({
-                        "recipient": "user@example.com",
-                        "subject": "Your order has shipped",
-                        "body": "Your order #12345 has been shipped..."
-                    }).encode(),
-                    properties=pika.BasicProperties(content_type='application/json')
-                )
-
-            logger.info(f"Published exchange-specific messages for vhost: {vhost}")
-        except Exception as e:
-            logger.error(f"Error publishing exchange-specific messages for vhost {vhost}: {e}")
-
-    finally:
-        connection.close()
-        logger.info(f"Finished initializing vhost: {vhost}")
 
 def main():
-    """Main entry point for the script"""
-    logger.info("Starting RabbitMQ message initializer")
-
-    # Wait for RabbitMQ to be available
-    if not wait_for_rabbitmq():
-        logger.error("Failed to connect to RabbitMQ")
+    log.info("Starting RabbitMQ seed")
+    if not wait_for_rabbit():
         return
 
-    # Make sure all vhosts exist
-    logger.info("Ensuring all virtual hosts exist...")
-    ensure_vhosts_exist()
+    # Default vhost
+    log.info("Seeding / vhost")
+    conn, ch = connect("/")
+    try:
+        declare_infrastructure(ch, EXCHANGES, DLX_QUEUES, PLAIN_QUEUES, DEAD_LETTER_QUEUES)
+        declare_main_bindings(ch)
+        seed_main_vhost(ch)
+    finally:
+        conn.close()
 
-    # Wait a bit after creating vhosts to ensure they're fully available
-    time.sleep(3)
+    log.info("Seed complete")
 
-    # Initialize each vhost with test messages
-    initialization_errors = False
-    for vhost in VHOSTS:
-        try:
-            logger.info(f"Starting initialization of vhost: {vhost}")
-            initialize_vhost(vhost)
-            logger.info(f"Successfully initialized vhost: {vhost}")
-        except Exception as e:
-            logger.error(f"Error initializing vhost {vhost}: {e}")
-            initialization_errors = True
-
-    if initialization_errors:
-        logger.warning("Message initialization completed with some errors. Check the logs for details.")
-    else:
-        logger.info("Message initialization completed successfully!")
-
-    # Always return success to allow container to exit cleanly
-    print("Message initialization completed successfully!")
 
 if __name__ == "__main__":
     main()
