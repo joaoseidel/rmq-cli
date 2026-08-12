@@ -21,6 +21,7 @@ export interface Column<T> {
 export interface TableProps<T> {
   readonly columns: readonly Column<T>[];
   readonly rows: readonly T[];
+  readonly widthRows?: readonly T[];
   readonly maxWidth: number;
   readonly selectedIndex?: number;
   readonly rowKey?: (row: T, index: number) => string;
@@ -149,6 +150,7 @@ function Rule({
 export function Table<T>({
   columns,
   rows,
+  widthRows,
   maxWidth,
   selectedIndex,
   rowKey,
@@ -160,7 +162,11 @@ export function Table<T>({
       : [markColumn(isMarked), ...(columns as Column<T>[])];
 
   const cells = renderCells(columns_, rows);
-  const widths = widthsForCells(columns_, cells, maxWidth);
+  const widths = widthsForCells(
+    columns_,
+    widthRows === undefined ? cells : renderCells(columns_, widthRows),
+    maxWidth,
+  );
   const pad = " ".repeat(CELL_PADDING);
   const border = <Text color={theme.border}>{borders.vertical}</Text>;
 

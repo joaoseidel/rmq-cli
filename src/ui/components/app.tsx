@@ -38,7 +38,6 @@ import { ScreenRouter, type ScreenContext } from "./screen-router.tsx";
 import { ConnectionFormScreen } from "./screens/connection-form-screen.tsx";
 
 const MESSAGE_PAGE_SIZE = 200;
-const QUEUE_CONCURRENCY = 4;
 
 const BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -207,6 +206,11 @@ function AppContent({ container, pageSize }: AppProps) {
   const stack = useScreenStack<Screen>({ name: "queues" });
   const screen = stack.current;
 
+  const preferences = useMemo(
+    () => container.preferences.read(),
+    [container],
+  );
+
   const jobs = useJobs(container.jobs);
   const runningJobs = useMemo(() => jobs.filter(isJobActive), [jobs]);
 
@@ -348,7 +352,7 @@ function AppContent({ container, pageSize }: AppProps) {
             let done = 0;
             const outcomes = await mapWithConcurrency(
               action.queues,
-              QUEUE_CONCURRENCY,
+              preferences.queueConcurrency,
               async (queue) =>
                 container.broker.withConnection(open, async (channel) => {
                   job.throwIfCancelled();
@@ -432,7 +436,7 @@ function AppContent({ container, pageSize }: AppProps) {
       setPending(null);
       listMemory.clearMarks();
     },
-    [container, connection, exit, stack, listMemory],
+    [container, connection, exit, stack, listMemory, preferences],
   );
 
   const runAction = useCallback(
@@ -694,7 +698,7 @@ function AppContent({ container, pageSize }: AppProps) {
     height: contentHeight,
     isActive: interactive,
     loadQueues,
-    messagePageSize: pageSize ?? MESSAGE_PAGE_SIZE,
+    messagePageSize: pageSize ?? preferences.messagePageSize,
     reloadToken,
     announce,
     refresh,
@@ -732,6 +736,8 @@ function AppContent({ container, pageSize }: AppProps) {
 
     jobs,
     scope,
+    preferences,
+    savePreferences: container.preferences.write.bind(container.preferences),
     onRecover: (operation) => {
       container.jobs.start({
         kind: "recover",

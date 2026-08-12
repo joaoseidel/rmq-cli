@@ -105,6 +105,7 @@ export function ConnectionsScreen({
     <Box flexDirection="column">
       <ConnectionTable
         connections={items.slice(start, end)}
+        allConnections={items}
         width={width}
         selectedIndex={navigation.selectedIndex - start}
       />

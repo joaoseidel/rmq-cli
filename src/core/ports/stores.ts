@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 import type { ConnectionInfo } from "../domain/connection.ts";
 import type { Message } from "../domain/message.ts";
+import type { Preferences } from "../domain/preferences.ts";
 import type {
   BackupOrigin,
   InterruptedOperation,
@@ -32,6 +33,11 @@ export interface ConfigurationStore {
   removeConnection(id: string): boolean;
   setDefaultConnection(id: string): boolean;
   getDefaultConnection(): ConnectionInfo | null;
+}
+
+export interface PreferencesStore {
+  read(): Preferences;
+  write(changes: Partial<Preferences>): Preferences;
 }
 
 export interface MessageBackupRepository {

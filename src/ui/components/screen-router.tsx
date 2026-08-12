@@ -5,6 +5,7 @@ import type { Queue } from "../../core/domain/queue.ts";
 import type { VHost } from "../../core/domain/vhost.ts";
 import type { ActionId } from "../actions.ts";
 import type { InterruptedOperation } from "../../core/domain/operation.ts";
+import type { Preferences } from "../../core/domain/preferences.ts";
 import type { Job } from "../../core/usecase/jobs.ts";
 import type { ListMemory } from "../hooks/use-list-memory.ts";
 import type { Screen, ScreenName } from "../screens.ts";
@@ -55,6 +56,8 @@ export interface ScreenContext {
   readonly listMemory: ListMemory;
   readonly jobs: readonly Job[];
   readonly scope: { readonly connectionId: string; readonly vhost: string };
+  readonly preferences: Preferences;
+  readonly savePreferences: (changes: Partial<Preferences>) => Preferences;
   readonly onRecover: (operation: InterruptedOperation) => void;
   readonly onForget: (operation: InterruptedOperation) => void;
   readonly helpFrom: ScreenName;
@@ -115,6 +118,8 @@ export function ScreenRouter({
       return (
         <SearchScreen
           messages={ctx.container.messages}
+          preferences={ctx.preferences}
+          savePreferences={ctx.savePreferences}
           connection={ctx.connection}
           queues={screen.queues}
           scope={screen.scope}

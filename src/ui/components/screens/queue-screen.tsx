@@ -119,6 +119,7 @@ export function QueueScreen({
         <>
           <MessageTable
             messages={list.visible.slice(start, end)}
+            allMessages={list.visible}
             width={width}
             pattern={list.filter}
             selectedIndex={list.selectedIndex - start}

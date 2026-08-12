@@ -99,6 +99,7 @@ export function QueuesScreen({
         <>
           <QueueTable
             queues={list.visible.slice(start, end)}
+            allQueues={list.visible}
             width={width}
             pattern={list.filter}
             selectedIndex={list.selectedIndex - start}

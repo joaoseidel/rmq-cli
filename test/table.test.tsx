@@ -111,3 +111,47 @@ describe("QueueTable", () => {
     expect(lastFrame()).toContain("22");
   });
 });
+
+describe("column widths while scrolling", () => {
+  const rows = [
+    { name: "short", vhost: "/", messagesReady: 1, messagesUnacknowledged: 0 },
+    {
+      name: "a-much-longer-queue-name-here",
+      vhost: "/",
+      messagesReady: 200000,
+      messagesUnacknowledged: 0,
+    },
+    { name: "mid-length", vhost: "/", messagesReady: 42, messagesUnacknowledged: 0 },
+  ];
+
+  function widthsOf(frame: string): number[] {
+    return (frame.split("\n")[0] ?? "").split(/[┬┼]/).map((cell) => cell.length);
+  }
+
+  it("stays put when only part of the list is on screen", () => {
+    const first = render(
+      <QueueTable queues={rows.slice(0, 1)} allQueues={rows} width={80} />,
+    );
+    const second = render(
+      <QueueTable queues={rows.slice(1, 2)} allQueues={rows} width={80} />,
+    );
+
+    expect(widthsOf(first.lastFrame() ?? "")).toEqual(
+      widthsOf(second.lastFrame() ?? ""),
+    );
+
+    first.unmount();
+    second.unmount();
+  });
+
+  it("still fits the width it is given", () => {
+    const { lastFrame, unmount } = render(
+      <QueueTable queues={rows.slice(0, 1)} allQueues={rows} width={60} />,
+    );
+
+    for (const line of (lastFrame() ?? "").split("\n")) {
+      expect(stringWidth(line)).toBeLessThanOrEqual(60);
+    }
+    unmount();
+  });
+});
