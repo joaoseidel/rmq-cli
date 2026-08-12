@@ -25,7 +25,7 @@ export function globMatcher(pattern: string): (value: string) => boolean {
   return (value) => regex.test(value);
 }
 
-function escapeRegex(value: string): string {
+export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

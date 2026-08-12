@@ -1,16 +1,38 @@
+import type { ConnectionInfo } from "../domain/connection.ts";
 import type { CompositeMessageId } from "../domain/message-id.ts";
 import type { Message } from "../domain/message.ts";
-import { failure, success } from "../domain/operation.ts";
-import type { BrokerClient, BrokerConnection } from "../ports/broker.ts";
+import {
+  failure,
+  success,
+  type ProgressReporter,
+} from "../domain/operation.ts";
+import {
+  PartialReadError,
+  type BrokerClient,
+  type BrokerConnection,
+  type PublishInput,
+} from "../ports/broker.ts";
 import type { SafeOperationCoordinator } from "../ports/stores.ts";
-import { globMatcher } from "../util/glob.ts";
+import { mapWithConcurrency } from "../util/pool.ts";
 import { errorMessage } from "../util/text.ts";
+import { messageMatcher } from "./message-query.ts";
 
 export const ALL_MESSAGES = Number.MAX_SAFE_INTEGER;
 
 export const SEARCH_DEPTHS = [100, 200, 500, 1000, 5000, 10_000] as const;
 
 export const DEFAULT_SEARCH_LIMIT = 200;
+
+export const DEFAULT_SEARCH_CONCURRENCY = 4;
+
+export const DEFAULT_PUBLISH_CONCURRENCY = 16;
+
+const DRAIN_CHUNK = 500;
+
+export interface SearchTarget {
+  readonly name: string;
+  readonly total: number;
+}
 
 export interface MessageSearchHit {
   readonly queue: string;
@@ -28,6 +50,7 @@ export interface MessageSearchOutcome {
   readonly queuesScanned: number;
   readonly failures: readonly MessageSearchFailure[];
   readonly truncated: readonly string[];
+  readonly partial: readonly string[];
   readonly cancelled: boolean;
 }
 
@@ -44,20 +67,19 @@ export function stepSearchDepth(
   return SEARCH_DEPTHS[next] ?? current;
 }
 
-export function searchableText(message: Message): string[] {
-  return [
-    message.payload,
-    message.id,
-    message.routingKey,
-    message.exchange,
-    ...Object.values(message.headers),
-    ...Object.values(message.properties),
-  ];
-}
-
-export function messageMatcher(term: string): (message: Message) => boolean {
-  const matches = globMatcher(`*${term}*`);
-  return (message) => searchableText(message).some(matches);
+export function republishInput(
+  message: Message,
+  route: { exchange?: string | undefined; routingKey: string },
+  connection: BrokerConnection,
+): PublishInput {
+  return {
+    ...(route.exchange === undefined ? {} : { exchange: route.exchange }),
+    routingKey: route.routingKey,
+    payload: message.payload,
+    headers: message.headers,
+    properties: message.properties,
+    connection,
+  };
 }
 
 export interface RemovalOutcome {
@@ -100,6 +122,16 @@ export class MessageOperations {
     });
   }
 
+  publishMessage(
+    message: Message,
+    route: { exchange?: string | undefined; routingKey: string },
+    connection: BrokerConnection,
+  ): Promise<boolean> {
+    return this.broker.publishMessage(
+      republishInput(message, route, connection),
+    );
+  }
+
   findMessage(
     id: CompositeMessageId,
     queueName: string,
@@ -118,70 +150,154 @@ export class MessageOperations {
   }
 
   async searchMessages(input: {
-    queueNames: readonly string[];
+    queues: readonly SearchTarget[];
     term: string;
+    info: ConnectionInfo;
     limitPerQueue?: number;
-    connection: BrokerConnection;
+    concurrency?: number;
     onProgress?: (outcome: MessageSearchOutcome) => void;
     isCancelled?: () => boolean;
   }): Promise<MessageSearchOutcome> {
-    const { queueNames, term, connection } = input;
+    const { queues, term, info } = input;
     const limit = input.limitPerQueue ?? DEFAULT_SEARCH_LIMIT;
     const matches = messageMatcher(term);
 
-    const hits: MessageSearchHit[] = [];
+    const hitsByQueue = queues.map((): MessageSearchHit[] => []);
     const failures: MessageSearchFailure[] = [];
     const truncated: string[] = [];
+    const partial: string[] = [];
     let scanned = 0;
     let queuesScanned = 0;
     let cancelled = false;
 
     const snapshot = (): MessageSearchOutcome => ({
-      hits: [...hits],
+      hits: hitsByQueue.flat(),
       scanned,
       queuesScanned,
       failures: [...failures],
       truncated: [...truncated],
+      partial: [...partial],
       cancelled,
     });
 
-    for (const queueName of queueNames) {
-      if (input.isCancelled?.() === true) {
-        cancelled = true;
-        break;
+    const collect = (
+      index: number,
+      target: SearchTarget,
+      found: readonly Message[],
+    ): void => {
+      scanned += found.length;
+      if (found.length >= limit && target.total > found.length) {
+        truncated.push(target.name);
       }
 
-      try {
-        const messages = await this.broker.getMessages({
-          queueName,
-          count: limit,
-          ack: false,
-          connection,
-        });
+      const bucket = hitsByQueue[index];
+      if (bucket === undefined) return;
 
-        scanned += messages.length;
-        if (messages.length >= limit) truncated.push(queueName);
+      for (const message of found) {
+        if (matches(message)) bucket.push({ queue: target.name, message });
+      }
+    };
 
-        for (const message of messages) {
-          if (matches(message)) hits.push({ queue: queueName, message });
+    let cursor = 0;
+    const workers = Math.max(
+      1,
+      Math.min(input.concurrency ?? DEFAULT_SEARCH_CONCURRENCY, queues.length),
+    );
+
+    const scan = async (connection: BrokerConnection): Promise<void> => {
+      for (;;) {
+        if (input.isCancelled?.() === true) {
+          cancelled = true;
+          return;
         }
-      } catch (error) {
-        failures.push({ queue: queueName, error: errorMessage(error) });
-      }
 
-      queuesScanned += 1;
-      input.onProgress?.(snapshot());
+        const index = cursor;
+        cursor += 1;
+
+        const target = queues[index];
+        if (target === undefined) return;
+
+        try {
+          const found = await this.broker.getMessages({
+            queueName: target.name,
+            count: limit,
+            ack: false,
+            connection,
+          });
+          collect(index, target, found);
+        } catch (error) {
+          if (error instanceof PartialReadError) {
+            collect(index, target, error.messages);
+            partial.push(target.name);
+          }
+          failures.push({ queue: target.name, error: errorMessage(error) });
+        }
+
+        await connection.requeueAll();
+
+        queuesScanned += 1;
+        input.onProgress?.(snapshot());
+      }
+    };
+
+    if (queues.length > 0) {
+      await Promise.all(
+        Array.from({ length: workers }, () =>
+          this.broker.withConnection(info, scan),
+        ),
+      );
     }
 
     return snapshot();
+  }
+
+  private async drainForTargets(input: {
+    queueName: string;
+    targets: ReadonlySet<string>;
+    drainAll: boolean;
+    connection: BrokerConnection;
+  }): Promise<readonly Message[]> {
+    const { queueName, targets, drainAll, connection } = input;
+
+    if (drainAll) {
+      return this.broker.getMessages({
+        queueName,
+        count: ALL_MESSAGES,
+        ack: true,
+        connection,
+      });
+    }
+
+    const drained: Message[] = [];
+    let remaining = targets.size;
+
+    while (remaining > 0) {
+      const chunk = await this.broker.getMessages({
+        queueName,
+        count: DRAIN_CHUNK,
+        ack: true,
+        connection,
+      });
+
+      for (const message of chunk) {
+        drained.push(message);
+        if (targets.has(message.id)) remaining -= 1;
+      }
+
+      if (chunk.length < DRAIN_CHUNK) break;
+    }
+
+    return drained;
   }
 
   async removeFromQueue(input: {
     queueName: string;
     targets: readonly CompositeMessageId[];
     connection: BrokerConnection;
+    drainAll?: boolean;
+    onProgress?: ProgressReporter;
   }): Promise<RemovalOutcome> {
-    const { queueName, connection } = input;
+    const { queueName, connection, onProgress } = input;
     const targets = new Set<string>(input.targets);
 
     let removed = 0;
@@ -191,10 +307,10 @@ export class MessageOperations {
     const summary = await this.coordinator.executeOperation({
       operationType: "remove-messages",
       provideMessages: () =>
-        this.broker.getMessages({
+        this.drainForTargets({
           queueName,
-          count: ALL_MESSAGES,
-          ack: true,
+          targets,
+          drainAll: input.drainAll ?? true,
           connection,
         }),
       process: async (message) => {
@@ -203,11 +319,9 @@ export class MessageOperations {
           return success(message.id);
         }
 
-        const republished = await this.broker.publishMessage({
-          routingKey: queueName,
-          payload: message.payload,
-          connection,
-        });
+        const republished = await this.broker.publishMessage(
+          republishInput(message, { routingKey: queueName }, connection),
+        );
 
         if (republished) {
           restored += 1;
@@ -217,6 +331,16 @@ export class MessageOperations {
         lost += 1;
         return failure(message.id, "Failed to restore message to the queue");
       },
+      ...(onProgress === undefined
+        ? {}
+        : {
+            onProgress: (progress: { processed: number; total: number }) =>
+              onProgress({
+                phase: "Repositioning",
+                done: progress.processed,
+                total: progress.total,
+              }),
+          }),
     });
 
     return {
@@ -232,6 +356,7 @@ export class MessageOperations {
     id: CompositeMessageId;
     queueName: string;
     connection: BrokerConnection;
+    onProgress?: ProgressReporter;
   }): Promise<RemovalOutcome> {
     const { id, ...rest } = input;
     return this.removeFromQueue({ ...rest, targets: [id] });
@@ -245,29 +370,46 @@ export class MessageOperations {
       routingKey: string;
     },
     describe: (message: Message) => string,
+    options: {
+      concurrency?: number;
+      onProgress?: ProgressReporter;
+    } = {},
   ): Promise<void> {
     let copied = 0;
+    let firstFailure: Message | null = null;
 
-    for (const message of messages) {
-      const { exchange, routingKey } = route(message);
+    const concurrency = Math.max(
+      1,
+      options.concurrency ?? DEFAULT_PUBLISH_CONCURRENCY,
+    );
 
-      const published = await this.broker.publishMessage({
-        ...(exchange === undefined ? {} : { exchange }),
-        routingKey,
-        payload: message.payload,
-        connection,
-      });
+    await mapWithConcurrency(messages, concurrency, async (message) => {
+      if (firstFailure !== null) return;
+
+      const published = await this.broker.publishMessage(
+        republishInput(message, route(message), connection),
+      );
 
       if (!published) {
-        throw new Error(
-          `Failed to publish to ${describe(message)}. ` +
-            (copied === 0
-              ? "Nothing was moved."
-              : `${copied} of ${messages.length} were already copied; none have been removed.`),
-        );
+        firstFailure ??= message;
+        return;
       }
 
       copied += 1;
+      options.onProgress?.({
+        phase: "Copying",
+        done: copied,
+        total: messages.length,
+      });
+    });
+
+    if (firstFailure !== null) {
+      throw new Error(
+        `Failed to publish to ${describe(firstFailure)}. ` +
+          (copied === 0
+            ? "Nothing was moved."
+            : `${copied} of ${messages.length} were already copied; none have been removed.`),
+      );
     }
   }
 
@@ -276,20 +418,29 @@ export class MessageOperations {
     fromQueue: string;
     toQueue: string;
     connection: BrokerConnection;
+    concurrency?: number;
+    onProgress?: ProgressReporter;
   }): Promise<RemovalOutcome> {
-    const { messages, fromQueue, toQueue, connection } = input;
+    const { messages, fromQueue, toQueue, connection, onProgress } = input;
 
     await this.publishAll(
       messages,
       connection,
       () => ({ routingKey: toQueue }),
       () => `'${toQueue}'`,
+      {
+        ...(input.concurrency === undefined
+          ? {}
+          : { concurrency: input.concurrency }),
+        ...(onProgress === undefined ? {} : { onProgress }),
+      },
     );
 
     return this.removeFromQueue({
       queueName: fromQueue,
       targets: messages.map((message) => message.id),
       connection,
+      ...(onProgress === undefined ? {} : { onProgress }),
     });
   }
 
@@ -297,8 +448,10 @@ export class MessageOperations {
     messages: readonly Message[];
     fromQueue: string;
     connection: BrokerConnection;
+    concurrency?: number;
+    onProgress?: ProgressReporter;
   }): Promise<RemovalOutcome> {
-    const { messages, fromQueue, connection } = input;
+    const { messages, fromQueue, connection, onProgress } = input;
 
     await this.publishAll(
       messages,
@@ -308,12 +461,19 @@ export class MessageOperations {
         routingKey: message.routingKey,
       }),
       (message) => `'${message.exchange}'`,
+      {
+        ...(input.concurrency === undefined
+          ? {}
+          : { concurrency: input.concurrency }),
+        ...(onProgress === undefined ? {} : { onProgress }),
+      },
     );
 
     return this.removeFromQueue({
       queueName: fromQueue,
       targets: messages.map((message) => message.id),
       connection,
+      ...(onProgress === undefined ? {} : { onProgress }),
     });
   }
 
@@ -322,6 +482,7 @@ export class MessageOperations {
     fromQueue: string;
     toQueue: string;
     connection: BrokerConnection;
+    onProgress?: ProgressReporter;
   }): Promise<RemovalOutcome> {
     const { message, ...rest } = input;
     return this.safeMoveMessages({ ...rest, messages: [message] });
@@ -331,6 +492,7 @@ export class MessageOperations {
     message: Message;
     fromQueue: string;
     connection: BrokerConnection;
+    onProgress?: ProgressReporter;
   }): Promise<RemovalOutcome> {
     const { message, ...rest } = input;
     return this.safeReprocessMessages({ ...rest, messages: [message] });

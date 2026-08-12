@@ -2,7 +2,9 @@ import {
   failure,
   success,
   type OperationSummary,
+  type ProgressReporter,
 } from "../domain/operation.ts";
+import { republishInput } from "./message-operations.ts";
 import type { Queue } from "../domain/queue.ts";
 import type {
   BrokerClient,
@@ -56,8 +58,9 @@ export class QueueOperations {
     toQueue: string;
     limit: number;
     connection: BrokerConnection;
+    onProgress?: ProgressReporter;
   }): Promise<OperationSummary> {
-    const { fromQueue, toQueue, limit, connection } = input;
+    const { fromQueue, toQueue, limit, connection, onProgress } = input;
 
     if (!(await this.queueExists(toQueue, connection))) {
       throw new Error(
@@ -75,16 +78,24 @@ export class QueueOperations {
           connection,
         }),
       process: async (message) => {
-        const published = await this.broker.publishMessage({
-          routingKey: toQueue,
-          payload: message.payload,
-          connection,
-        });
+        const published = await this.broker.publishMessage(
+          republishInput(message, { routingKey: toQueue }, connection),
+        );
 
         return published
           ? success(message.id)
           : failure(message.id, "Failed to publish to target queue");
       },
+      ...(onProgress === undefined
+        ? {}
+        : {
+            onProgress: (progress: { processed: number; total: number }) =>
+              onProgress({
+                phase: "Transferring",
+                done: progress.processed,
+                total: progress.total,
+              }),
+          }),
     });
   }
 }

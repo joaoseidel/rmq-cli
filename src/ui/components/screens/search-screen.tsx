@@ -2,8 +2,7 @@ import { Box, Text } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionInfo } from "../../../core/domain/connection.ts";
 import type { Message } from "../../../core/domain/message.ts";
-import type { Queue } from "../../../core/domain/queue.ts";
-import type { BrokerClient } from "../../../core/ports/broker.ts";
+import { totalMessages, type Queue } from "../../../core/domain/queue.ts";
 import {
   DEFAULT_SEARCH_LIMIT,
   SEARCH_DEPTHS,
@@ -11,6 +10,10 @@ import {
   type MessageOperations,
   type MessageSearchOutcome,
 } from "../../../core/usecase/message-operations.ts";
+import {
+  parseQuery,
+  queryHighlight,
+} from "../../../core/usecase/message-query.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import type { ActionId } from "../../actions.ts";
 import { useListNavigation } from "../../hooks/use-list-navigation.ts";
@@ -28,6 +31,7 @@ const EMPTY_OUTCOME: MessageSearchOutcome = {
   queuesScanned: 0,
   failures: [],
   truncated: [],
+  partial: [],
   cancelled: false,
 };
 
@@ -40,7 +44,6 @@ interface SearchRun {
 }
 
 export interface SearchScreenProps {
-  readonly broker: BrokerClient;
   readonly messages: MessageOperations;
   readonly connection: ConnectionInfo;
   readonly queues: readonly Queue[];
@@ -53,7 +56,6 @@ export interface SearchScreenProps {
 }
 
 export function SearchScreen({
-  broker,
   messages,
   connection,
   queues,
@@ -73,16 +75,29 @@ export function SearchScreen({
   const [limit, setLimit] = useState<number>(DEFAULT_SEARCH_LIMIT);
   const [run, setRun] = useState<SearchRun | null>(null);
 
-  const queueNames = useMemo(() => queues.map((queue) => queue.name), [queues]);
+  const targets = useMemo(
+    () =>
+      queues.map((queue) => ({
+        name: queue.name,
+        total: totalMessages(queue),
+      })),
+    [queues],
+  );
   const queuesByName = useMemo(
     () => new Map(queues.map((queue) => [queue.name, queue])),
     [queues],
   );
 
+  const parsed = useMemo(
+    () => (query === "" ? null : parseQuery(query)),
+    [query],
+  );
+  const invalid = parsed?.kind === "invalid" ? parsed.reason : null;
+
   const cancelledRef = useRef(false);
 
   useEffect(() => {
-    if (query === "") {
+    if (query === "" || invalid !== null) {
       setRun(null);
       return;
     }
@@ -91,19 +106,17 @@ export function SearchScreen({
     let live = true;
     setRun({ term: query, limit, outcome: EMPTY_OUTCOME, done: false });
 
-    broker
-      .withConnection(connection, (open) =>
-        messages.searchMessages({
-          queueNames,
-          term: query,
-          limitPerQueue: limit,
-          connection: open,
-          isCancelled: () => cancelledRef.current,
-          onProgress: (outcome) => {
-            if (live) setRun({ term: query, limit, outcome, done: false });
-          },
-        }),
-      )
+    messages
+      .searchMessages({
+        queues: targets,
+        term: query,
+        limitPerQueue: limit,
+        info: connection,
+        isCancelled: () => cancelledRef.current,
+        onProgress: (outcome) => {
+          if (live) setRun({ term: query, limit, outcome, done: false });
+        },
+      })
       .then((outcome) => {
         if (live) setRun({ term: query, limit, outcome, done: true });
       })
@@ -122,7 +135,7 @@ export function SearchScreen({
       live = false;
       cancelledRef.current = true;
     };
-  }, [query, runToken, limit, broker, messages, connection, queueNames]);
+  }, [query, runToken, limit, invalid, messages, connection, targets]);
 
   const hits = run?.outcome.hits ?? [];
   const rowsAvailable = Math.max(1, height - SEARCH_CHROME_LINES);
@@ -182,15 +195,24 @@ export function SearchScreen({
         messages each, never consumed
       </Text>
 
-      <SearchBody
-        run={run}
-        typing={typing}
-        hits={hits}
-        width={width}
-        start={start}
-        end={end}
-        selectedIndex={navigation.selectedIndex}
-      />
+      {invalid === null ? (
+        <SearchBody
+          run={run}
+          typing={typing}
+          hits={hits}
+          width={width}
+          start={start}
+          end={end}
+          highlight={
+            parsed === null || parsed.kind === "invalid"
+              ? ""
+              : queryHighlight(parsed)
+          }
+          selectedIndex={navigation.selectedIndex}
+        />
+      ) : (
+        <StatusMessage tone="danger">{invalid}</StatusMessage>
+      )}
     </Box>
   );
 }
@@ -202,6 +224,7 @@ function SearchBody({
   width,
   start,
   end,
+  highlight,
   selectedIndex,
 }: {
   readonly run: SearchRun | null;
@@ -210,15 +233,28 @@ function SearchBody({
   readonly width: number;
   readonly start: number;
   readonly end: number;
+  readonly highlight: string;
   readonly selectedIndex: number;
 }) {
   if (run === null) {
     return (
-      <Text color={theme.muted}>
-        {typing
-          ? "Type a payload or message id to look for, then Enter."
-          : "Press / to search these queues."}
-      </Text>
+      <Box flexDirection="column">
+        <Text color={theme.muted}>
+          {typing
+            ? "Type text, a JSON fragment, or field:value to look for, then Enter."
+            : "Press / to search these queues."}
+        </Text>
+        <Text color={theme.muted}>
+          {glyphs.bullet} {'{"status":"failed"}'} matches that fragment wherever
+          it is nested
+        </Text>
+        <Text color={theme.muted}>
+          {glyphs.bullet} order.items.sku:AB-991 walks into the payload
+        </Text>
+        <Text color={theme.muted}>
+          {glyphs.bullet} re:AB-\d{"{3}"} runs an explicit regular expression
+        </Text>
+      </Box>
     );
   }
 
@@ -239,7 +275,7 @@ function SearchBody({
           <SearchHitTable
             hits={hits.slice(start, end)}
             width={width}
-            pattern={run.term}
+            pattern={highlight}
             selectedIndex={selectedIndex - start}
           />
 
@@ -257,7 +293,7 @@ function SearchBody({
 
 function SearchSummary({ run }: { readonly run: SearchRun }) {
   const { outcome, done } = run;
-  const { truncated, failures } = outcome;
+  const { truncated, failures, partial } = outcome;
 
   const progress = done
     ? `${formatCount(outcome.queuesScanned, "queue")} searched`
@@ -281,6 +317,12 @@ function SearchSummary({ run }: { readonly run: SearchRun }) {
           .slice(0, 2)
           .map((entry) => `${entry.queue} (${entry.error})`)
           .join("; "),
+    );
+  }
+  if (partial.length > 0) {
+    caveats.push(
+      `${formatCount(partial.length, "queue")} stopped early, so these results are incomplete ` +
+        `(${partial.slice(0, 3).join(", ")}${partial.length > 3 ? ", …" : ""})`,
     );
   }
   if (outcome.cancelled) caveats.push("stopped early");

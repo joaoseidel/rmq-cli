@@ -102,7 +102,6 @@ export function ScreenRouter({
     case "search":
       return (
         <SearchScreen
-          broker={ctx.container.broker}
           messages={ctx.container.messages}
           connection={ctx.connection}
           queues={screen.queues}

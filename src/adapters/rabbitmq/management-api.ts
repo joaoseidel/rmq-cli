@@ -2,7 +2,10 @@ import {
   httpApiUrl,
   type ConnectionInfo,
 } from "../../core/domain/connection.ts";
-import type { HttpInboundMessage } from "../../core/domain/message.ts";
+import {
+  toAmqpProperties,
+  type HttpInboundMessage,
+} from "../../core/domain/message.ts";
 import type { Queue } from "../../core/domain/queue.ts";
 import { toGlobRegex } from "../../core/util/glob.ts";
 import { createLogger } from "../../core/util/logger.ts";
@@ -191,6 +194,8 @@ export class ManagementApi {
     exchange: string,
     routingKey: string,
     payload: string,
+    headers?: Readonly<Record<string, string>> | undefined,
+    properties?: Readonly<Record<string, string>> | undefined,
   ): Promise<boolean> {
     try {
       const response = await this.request(
@@ -198,7 +203,10 @@ export class ManagementApi {
         {
           method: "POST",
           body: JSON.stringify({
-            properties: {},
+            properties: {
+              ...toAmqpProperties(properties),
+              ...(headers === undefined ? {} : { headers }),
+            },
             routing_key: routingKey,
             payload,
             payload_encoding: "string",
