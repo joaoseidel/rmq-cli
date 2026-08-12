@@ -6,6 +6,7 @@ import { JsonSettingsStore } from "./adapters/storage/json-settings-store.ts";
 import { FileKeySecretCipher } from "./adapters/storage/secret-cipher.ts";
 import type { BrokerClient } from "./core/ports/broker.ts";
 import { ConnectionOperations } from "./core/usecase/connection-operations.ts";
+import { JobManager } from "./core/usecase/jobs.ts";
 import { MessageOperations } from "./core/usecase/message-operations.ts";
 import { QueueOperations } from "./core/usecase/queue-operations.ts";
 import { VHostOperations } from "./core/usecase/vhost-operations.ts";
@@ -16,6 +17,7 @@ export interface Container {
   readonly queues: QueueOperations;
   readonly messages: MessageOperations;
   readonly vhosts: VHostOperations;
+  readonly jobs: JobManager;
 }
 
 export function createContainer(): Container {
@@ -39,5 +41,6 @@ export function createContainer(): Container {
     queues: new QueueOperations(broker, coordinator),
     messages: new MessageOperations(broker, coordinator),
     vhosts: new VHostOperations(broker, configStore),
+    jobs: new JobManager(),
   };
 }

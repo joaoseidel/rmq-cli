@@ -5,8 +5,11 @@ import { isAmqp, type ConnectionInfo } from "../../core/domain/connection.ts";
 import { displayExchange, type Message } from "../../core/domain/message.ts";
 import type { Queue } from "../../core/domain/queue.ts";
 import { totalMessages } from "../../core/domain/queue.ts";
+import { isActive as isJobActive, type Job } from "../../core/usecase/jobs.ts";
+import { mapWithConcurrency } from "../../core/util/pool.ts";
 import { errorMessage, formatCount } from "../../core/util/text.ts";
 import { paletteActions, rowActions, type ActionId } from "../actions.ts";
+import { useJobCompletions, useJobs } from "../hooks/use-jobs.ts";
 import {
   InputCaptureProvider,
   useInputCaptured,
@@ -25,6 +28,7 @@ import {
 import { glyphs, theme } from "../theme.ts";
 import { Confirm } from "./common/confirm.tsx";
 import { CommandPalette } from "./parts/command-palette.tsx";
+import { JobIndicator } from "./parts/job-progress.tsx";
 import { RowMenu } from "./parts/row-menu.tsx";
 import type { KeyHint } from "./parts/key-hints.tsx";
 import { SCREEN_CHROME_LINES, ScreenFrame } from "./parts/screen-frame.tsx";
@@ -33,6 +37,7 @@ import { ScreenRouter, type ScreenContext } from "./screen-router.tsx";
 import { ConnectionFormScreen } from "./screens/connection-form-screen.tsx";
 
 const MESSAGE_PAGE_SIZE = 200;
+const QUEUE_CONCURRENCY = 4;
 
 const NOTICE_MS = 4000;
 const DANGER_NOTICE_MS = 10_000;
@@ -43,7 +48,8 @@ type PendingAction =
       readonly kind: "delete";
       readonly queue: Queue;
       readonly messages: readonly Message[];
-    };
+    }
+  | { readonly kind: "quit"; readonly running: readonly Job[] };
 
 interface Overlay {
   readonly kind: "palette" | "row";
@@ -88,7 +94,7 @@ const TYPING_HINTS: KeyHint[] = [
 
 function hintsFor(
   screen: Screen["name"],
-  options: { typing: boolean; canGoBack: boolean },
+  options: { typing: boolean; canGoBack: boolean; running: number },
 ): KeyHint[] {
   if (options.typing) return TYPING_HINTS;
 
@@ -101,6 +107,9 @@ function hintsFor(
   return [
     ...screenHints,
     { keys: ".", label: "row menu" },
+    ...(options.running > 0 && screen !== "jobs"
+      ? [{ keys: "J", label: `${options.running} running`, essential: true }]
+      : [{ keys: "J", label: "jobs" }]),
     { keys: ":", label: "actions", essential: true },
     { keys: "?", label: "help", essential: true },
     options.canGoBack
@@ -133,6 +142,20 @@ function rowMenuSubject(selection: PublishedSelection): {
 }
 
 function confirmationFor(pending: PendingAction): string {
+  if (pending.kind === "quit") {
+    const titles = pending.running
+      .slice(0, 2)
+      .map((job) => job.title)
+      .join(", ");
+    const rest =
+      pending.running.length > 2 ? `, and ${pending.running.length - 2} more` : "";
+
+    return (
+      `${formatCount(pending.running.length, "operation")} still running (${titles}${rest}). ` +
+      "Quit anyway? Anything half-done is left in a backup file."
+    );
+  }
+
   if (pending.kind === "purge") {
     const total = pending.queues.reduce(
       (sum, queue) => sum + totalMessages(queue),
@@ -179,6 +202,9 @@ function AppContent({ container }: AppProps) {
   const typing = useInputCaptured();
   const stack = useScreenStack<Screen>({ name: "queues" });
   const screen = stack.current;
+
+  const jobs = useJobs(container.jobs);
+  const runningJobs = useMemo(() => jobs.filter(isJobActive), [jobs]);
 
   const selectionRef = useRef<{ queue: Queue | null; message: Message | null }>(
     { queue: null, message: null },
@@ -227,6 +253,16 @@ function AppContent({ container }: AppProps) {
   );
 
   const refresh = useCallback(() => setReloadToken((value) => value + 1), []);
+
+  const requestQuit = useCallback(() => {
+    const running = container.jobs.active();
+    if (running.length === 0) {
+      exit();
+      return;
+    }
+    setOverlay(null);
+    setPending({ kind: "quit", running });
+  }, [container, exit]);
   const clearFilterRequest = useCallback(() => setFilterRequested(false), []);
 
   const announce = useCallback(
@@ -235,6 +271,14 @@ function AppContent({ container }: AppProps) {
     },
     [],
   );
+
+  useJobCompletions(jobs, (job) => {
+    if (job.state === "failed") announce(job.error ?? "Operation failed.", "danger");
+    else if (job.state === "cancelled") announce(`${job.title}: stopped.`, "danger");
+    else announce(job.result ?? `${job.title}: done.`);
+
+    refresh();
+  });
 
   useEffect(() => {
     if (notice === null) return;
@@ -270,94 +314,113 @@ function AppContent({ container }: AppProps) {
   );
 
   const runPending = useCallback(
-    async (action: PendingAction) => {
+    (action: PendingAction) => {
+      if (action.kind === "quit") {
+        setPending(null);
+        container.jobs.cancelAll();
+        exit();
+        return;
+      }
+
       if (connection === null) return;
+      const open = connection;
 
-      try {
-        if (action.kind === "purge") {
-          const outcomes = await container.broker.withConnection(
-            connection,
-            async (open) => {
-              const results = [];
-              for (const queue of action.queues) {
-                results.push({
-                  queue,
-                  ...(await container.queues.purgeQueue(queue.name, open)),
-                });
-              }
-              return results;
-            },
-          );
-
-          const failed = outcomes.filter((entry) => !entry.ok);
-          const removed = outcomes.reduce(
-            (sum, entry) => sum + (entry.purged ?? 0),
-            0,
-          );
-
-          if (failed.length > 0) {
-            announce(
-              `Failed to purge ${failed.map((entry) => entry.queue.name).join(", ")}.`,
-              "danger",
+      if (action.kind === "purge") {
+        container.jobs.start({
+          kind: "purge",
+          title:
+            action.queues.length === 1
+              ? `Purging ${action.queues[0]?.name}`
+              : `Purging ${formatCount(action.queues.length, "queue")}`,
+          run: async (job) => {
+            let done = 0;
+            const outcomes = await mapWithConcurrency(
+              action.queues,
+              QUEUE_CONCURRENCY,
+              async (queue) =>
+                container.broker.withConnection(open, async (channel) => {
+                  job.throwIfCancelled();
+                  const result = await container.queues.purgeQueue(
+                    queue.name,
+                    channel,
+                  );
+                  done += 1;
+                  job.report({
+                    phase: "Purging",
+                    done,
+                    total: action.queues.length,
+                  });
+                  return { queue, ...result };
+                }),
             );
-          } else if (outcomes.length === 1) {
-            const only = outcomes[0];
-            announce(
-              only?.purged == null
+
+            const failed = outcomes.filter((entry) => !entry.ok);
+            if (failed.length > 0) {
+              throw new Error(
+                `Failed to purge ${failed.map((entry) => entry.queue.name).join(", ")}.`,
+              );
+            }
+
+            const removed = outcomes.reduce(
+              (sum, entry) => sum + (entry.purged ?? 0),
+              0,
+            );
+
+            if (outcomes.length === 1) {
+              const only = outcomes[0];
+              return only?.purged == null
                 ? `Purged ${only?.queue.name}.`
-                : `Purged ${only.queue.name}: ${formatCount(only.purged, "message")} removed.`,
-            );
-          } else {
-            announce(
-              `Purged ${formatCount(outcomes.length, "queue")}: ${formatCount(removed, "message")} removed.`,
-            );
-          }
-        } else {
-          const outcome = await container.broker.withConnection(
-            connection,
-            (open) =>
-              container.messages.removeFromQueue({
+                : `Purged ${only.queue.name}: ${formatCount(only.purged, "message")} removed.`;
+            }
+
+            return `Purged ${formatCount(outcomes.length, "queue")}: ${formatCount(removed, "message")} removed.`;
+          },
+        });
+      } else {
+        container.jobs.start({
+          kind: "delete",
+          title:
+            action.messages.length === 1
+              ? `Deleting 1 message from ${action.queue.name}`
+              : `Deleting ${formatCount(action.messages.length, "message")} from ${action.queue.name}`,
+          run: async (job) =>
+            container.broker.withConnection(open, async (channel) => {
+              const outcome = await container.messages.removeFromQueue({
                 targets: action.messages.map((message) => message.id),
                 queueName: action.queue.name,
-                connection: open,
-              }),
-          );
+                connection: channel,
+                onProgress: job.report,
+              });
 
-          if (outcome.lost > 0) {
-            announce(
-              `Deleted, but ${formatCount(outcome.lost, "message")} could not be put back, ` +
-                `saved under operation ${outcome.operationId}.`,
-              "danger",
-            );
-          } else if (outcome.removed === 0) {
-            announce(
-              action.messages.length === 1
-                ? "That message was no longer in the queue."
-                : "None of those messages were still in the queue.",
-              "danger",
-            );
-          } else {
-            announce(
-              `Deleted ${formatCount(outcome.removed, "message")} from ${action.queue.name}` +
+              if (outcome.lost > 0) {
+                throw new Error(
+                  `Deleted, but ${formatCount(outcome.lost, "message")} could not be put back, ` +
+                    `saved under operation ${outcome.operationId}.`,
+                );
+              }
+
+              if (outcome.removed === 0) {
+                return action.messages.length === 1
+                  ? "That message was no longer in the queue."
+                  : "None of those messages were still in the queue.";
+              }
+
+              return (
+                `Deleted ${formatCount(outcome.removed, "message")} from ${action.queue.name}` +
                 (outcome.restored > 0
-                  ? `, ${formatCount(outcome.restored, "message")} left untouched.`
-                  : "."),
-            );
-          }
-        }
-      } catch (error) {
-        announce(errorMessage(error), "danger");
-      } finally {
-        setPending(null);
-        refresh();
-        listMemory.clearMarks();
+                  ? `, ${formatCount(outcome.restored, "message")} put back.`
+                  : ".")
+              );
+            }),
+        });
 
-        if (action.kind === "delete") {
-          stack.popUntil((screen) => screen.name !== "message");
-        }
+        stack.popUntil((entry) => entry.name !== "message");
       }
+
+      setPending(null);
+      listMemory.clearMarks();
     },
-    [container, connection, announce, refresh, stack, listMemory],
+    [container, connection, exit, stack, listMemory],
   );
 
   const runAction = useCallback(
@@ -476,6 +539,9 @@ function AppContent({ container }: AppProps) {
         case "help":
           stack.push({ name: "help" });
           break;
+        case "jobs":
+          stack.push({ name: "jobs" });
+          break;
         case "search-messages": {
           const { queues: scope, filter } = queueScopeRef.current;
           if (scope.length === 0) {
@@ -491,17 +557,26 @@ function AppContent({ container }: AppProps) {
           else announce("Nothing to filter on this screen.", "danger");
           break;
         case "quit":
-          exit();
+          requestQuit();
           break;
       }
     },
-    [screen, stack, refresh, exit, announce],
+    [screen, stack, refresh, exit, announce, requestQuit],
   );
 
   useKeyHandler(
     (input, key) => {
-      if (key.ctrl && input === "c") {
-        exit();
+      if (key.ctrl && input === "c") requestQuit();
+    },
+    { isActive: true },
+  );
+
+  useKeyHandler(
+    (input, key) => {
+      if (key.ctrl && input === "c") return;
+
+      if (input === "J") {
+        if (screen.name !== "jobs") stack.push({ name: "jobs" });
         return;
       }
 
@@ -533,7 +608,7 @@ function AppContent({ container }: AppProps) {
           setNotice(null);
           stack.back();
         } else if (input === "q") {
-          exit();
+          requestQuit();
         }
       }
     },
@@ -635,6 +710,7 @@ function AppContent({ container }: AppProps) {
     onQueueScopeChange: setQueueScope,
     listMemory,
 
+    jobs,
     helpFrom: stack.previous?.name ?? "queues",
     filterRequested,
     onFilterOpened: clearFilterRequest,
@@ -645,9 +721,13 @@ function AppContent({ container }: AppProps) {
       title={`rmq ${glyphs.bullet} ${screenTitle(screen)}`}
       subtitle={subtitle}
       badge={
-        <Text color={theme.muted}>
-          {stack.depth > 1 ? `${stack.depth - 1} deep` : ""}
-        </Text>
+        runningJobs.length > 0 ? (
+          <JobIndicator jobs={runningJobs} />
+        ) : (
+          <Text color={theme.muted}>
+            {stack.depth > 1 ? `${stack.depth - 1} deep` : ""}
+          </Text>
+        )
       }
       hints={
         overlay?.kind === "palette"
@@ -656,7 +736,11 @@ function AppContent({ container }: AppProps) {
             ? ROW_MENU_HINTS
             : pending !== null
               ? CONFIRM_HINTS
-              : hintsFor(screen.name, { typing, canGoBack: stack.canGoBack })
+              : hintsFor(screen.name, {
+                  typing,
+                  canGoBack: stack.canGoBack,
+                  running: runningJobs.length,
+                })
       }
       status={status}
       width={columns}

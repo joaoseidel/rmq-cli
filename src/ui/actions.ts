@@ -19,6 +19,7 @@ export const ACTION_IDS = [
   "connections",
   "add-connection",
   "vhosts",
+  "jobs",
   "help",
   "quit",
 ] as const;
@@ -41,6 +42,7 @@ const EVERYWHERE: readonly Screen["name"][] = [
   "connections",
   "connection-form",
   "vhosts",
+  "jobs",
   "help",
 ];
 
@@ -148,6 +150,11 @@ const SPECS: Record<ActionId, ActionSpec> = {
     label: "Virtual hosts",
     hint: "switch the active vhost",
     from: ["queues", "connections"],
+  },
+  jobs: {
+    label: "Background jobs",
+    hint: "watch, cancel, or clear running operations",
+    from: EVERYWHERE.filter((name) => name !== "jobs"),
   },
   help: {
     label: "Help",

@@ -1,21 +1,17 @@
 import { Box, Text } from "ink";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ConnectionInfo } from "../../../core/domain/connection.ts";
 import { displayExchange, type Message } from "../../../core/domain/message.ts";
 import type { Queue } from "../../../core/domain/queue.ts";
 import type { BrokerClient } from "../../../core/ports/broker.ts";
-import type {
-  MessageOperations,
-  RemovalOutcome,
-} from "../../../core/usecase/message-operations.ts";
-import { errorMessage, formatCount } from "../../../core/util/text.ts";
-import { useAsyncAction } from "../../hooks/use-async-action.ts";
+import type { JobManager } from "../../../core/usecase/jobs.ts";
+import type { MessageOperations } from "../../../core/usecase/message-operations.ts";
+import { formatCount } from "../../../core/util/text.ts";
 import { useQueueNames } from "../../hooks/use-queue-names.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { toSingleLine, truncateToWidth } from "../../utils/width.ts";
 import { Confirm } from "../common/confirm.tsx";
 import { Form, mustBeKnown, type FormField } from "../common/form.tsx";
-import { Spinner } from "../parts/spinner.tsx";
 import { Muted, Name, StatusMessage } from "../parts/status-message.tsx";
 
 export type MoveMode = "move" | "reprocess";
@@ -24,6 +20,7 @@ export interface MoveMessageScreenProps {
   readonly mode: MoveMode;
   readonly broker: BrokerClient;
   readonly operations: MessageOperations;
+  readonly jobs: JobManager;
   readonly connection: ConnectionInfo;
   readonly queue: Queue;
   readonly messages: readonly Message[];
@@ -71,6 +68,7 @@ export function MoveMessageScreen({
   mode,
   broker,
   operations,
+  jobs,
   connection,
   queue,
   messages,
@@ -83,62 +81,49 @@ export function MoveMessageScreen({
   );
   const queueNames = useQueueNames(broker, connection);
 
-  const action = useAsyncAction(
-    async (target: string): Promise<RemovalOutcome> =>
-      broker.withConnection(connection, (open) =>
-        mode === "move"
-          ? operations.safeMoveMessages({
-              messages,
-              fromQueue: queue.name,
-              toQueue: target,
-              connection: open,
-            })
-          : operations.safeReprocessMessages({
-              messages,
-              fromQueue: queue.name,
-              connection: open,
-            }),
-      ),
-  );
-
-  const outcome = action.state.status === "success" ? action.state.data : null;
-  const error = action.state.status === "failure" ? action.state.error : null;
-
-  useEffect(() => {
-    if (outcome === null) return;
-
-    if (outcome.lost > 0) {
-      onDone(
-        `${outcome.removed} moved, but ${formatCount(outcome.lost, "message")} could not be put back, ` +
-          `saved under operation ${outcome.operationId}.`,
-        "danger",
-      );
-      return;
-    }
-
-    onDone(
+  const start = (target: string) => {
+    const what = formatCount(messages.length, "message");
+    const title =
       mode === "move"
-        ? `Moved ${formatCount(outcome.removed, "message")} out of ${queue.name}${outcome.restored > 0 ? `, ${formatCount(outcome.restored, "message")} left untouched` : ""}.`
-        : `Reprocessed ${formatCount(outcome.removed, "message")} from ${queue.name}.`,
-      "success",
-    );
-  }, [outcome, onDone, mode, queue.name]);
+        ? `Moving ${what} to ${target}`
+        : `Reprocessing ${what} from ${queue.name}`;
 
-  useEffect(() => {
-    if (error !== null) onDone(errorMessage(error), "danger");
-  }, [error, onDone]);
+    jobs.start({
+      kind: mode,
+      title,
+      run: (job) =>
+        broker.withConnection(connection, async (open) => {
+          const outcome =
+            mode === "move"
+              ? await operations.safeMoveMessages({
+                  messages,
+                  fromQueue: queue.name,
+                  toQueue: target,
+                  connection: open,
+                  onProgress: job.report,
+                })
+              : await operations.safeReprocessMessages({
+                  messages,
+                  fromQueue: queue.name,
+                  connection: open,
+                  onProgress: job.report,
+                });
 
-  if (action.state.status === "running") {
-    return (
-      <Spinner
-        label={
-          mode === "move"
-            ? `Moving ${formatCount(messages.length, "message")}…`
-            : `Reprocessing ${formatCount(messages.length, "message")}…`
-        }
-      />
-    );
-  }
+          if (outcome.lost > 0) {
+            throw new Error(
+              `${outcome.removed} moved, but ${formatCount(outcome.lost, "message")} could not be put back, ` +
+                `saved under operation ${outcome.operationId}.`,
+            );
+          }
+
+          return mode === "move"
+            ? `Moved ${formatCount(outcome.removed, "message")} out of ${queue.name}${outcome.restored > 0 ? `, ${formatCount(outcome.restored, "message")} put back` : ""}.`
+            : `Reprocessed ${formatCount(outcome.removed, "message")} from ${queue.name}.`;
+        }),
+    });
+
+    onDone(`${title}… press J to watch it.`, "success");
+  };
 
   const shown = messages.slice(0, 4);
 
@@ -192,7 +177,7 @@ export function MoveMessageScreen({
         message={describe(mode, messages, queue, destination)}
         isActive={isActive}
         onAnswer={(confirmed) => {
-          if (confirmed) action.run(destination);
+          if (confirmed) start(destination);
           else if (mode === "move") setDestination(null);
           else onCancel();
         }}

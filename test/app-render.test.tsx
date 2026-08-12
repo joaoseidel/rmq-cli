@@ -10,6 +10,7 @@ import { JsonSettingsStore } from "../src/adapters/storage/json-settings-store.t
 import { FileKeySecretCipher } from "../src/adapters/storage/secret-cipher.ts";
 import type { Container } from "../src/container.ts";
 import { ConnectionOperations } from "../src/core/usecase/connection-operations.ts";
+import { JobManager } from "../src/core/usecase/jobs.ts";
 import { MessageOperations } from "../src/core/usecase/message-operations.ts";
 import { QueueOperations } from "../src/core/usecase/queue-operations.ts";
 import { VHostOperations } from "../src/core/usecase/vhost-operations.ts";
@@ -39,6 +40,7 @@ function build(seed: Record<string, string[]>): Container {
     queues: new QueueOperations(broker, coordinator),
     messages: new MessageOperations(broker, coordinator),
     vhosts: new VHostOperations(broker, configStore),
+    jobs: new JobManager(),
   };
 }
 
