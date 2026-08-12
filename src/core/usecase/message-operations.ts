@@ -4,6 +4,7 @@ import type { Message } from "../domain/message.ts";
 import {
   failure,
   success,
+  type InterruptedOperation,
   type ProgressReporter,
 } from "../domain/operation.ts";
 import {
@@ -12,7 +13,10 @@ import {
   type BrokerConnection,
   type PublishInput,
 } from "../ports/broker.ts";
-import type { SafeOperationCoordinator } from "../ports/stores.ts";
+import type {
+  MessageBackupRepository,
+  SafeOperationCoordinator,
+} from "../ports/stores.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { errorMessage } from "../util/text.ts";
 import { messageMatcher } from "./message-query.ts";
@@ -90,11 +94,67 @@ export interface RemovalOutcome {
   readonly unprocessedMessages: readonly Message[];
 }
 
+export interface RecoveryOutcome {
+  readonly restored: number;
+  readonly failed: number;
+}
+
 export class MessageOperations {
   constructor(
     private readonly broker: BrokerClient,
     private readonly coordinator: SafeOperationCoordinator,
+    private readonly backups: MessageBackupRepository,
   ) {}
+
+  listInterruptedOperations(): InterruptedOperation[] {
+    return this.backups.listInterruptedOperations();
+  }
+
+  forgetOperation(operationId: string): boolean {
+    return this.backups.forget(operationId);
+  }
+
+  pruneOldBackups(maxAgeMs: number): number {
+    return this.backups.pruneOlderThan(Date.now() - maxAgeMs);
+  }
+
+  async recoverOperation(input: {
+    operationId: string;
+    queueName: string;
+    connection: BrokerConnection;
+    onProgress?: ProgressReporter;
+    isCancelled?: () => boolean;
+  }): Promise<RecoveryOutcome> {
+    const { operationId, queueName, connection } = input;
+    const pending = this.backups.getUnprocessedMessages(operationId);
+
+    let restored = 0;
+    let failed = 0;
+
+    for (const message of pending) {
+      if (input.isCancelled?.() === true) break;
+
+      const published = await this.broker.publishMessage(
+        republishInput(message, { routingKey: queueName }, connection),
+      );
+
+      if (published) {
+        this.backups.markMessageAsProcessed(operationId, message.id);
+        restored += 1;
+      } else {
+        failed += 1;
+      }
+
+      input.onProgress?.({
+        phase: "Restoring",
+        done: restored + failed,
+        total: pending.length,
+      });
+    }
+
+    if (failed === 0) this.backups.completeOperation(operationId);
+    return { restored, failed };
+  }
 
   publishToQueue(
     queueName: string,
@@ -306,6 +366,7 @@ export class MessageOperations {
 
     const summary = await this.coordinator.executeOperation({
       operationType: "remove-messages",
+      queueName,
       provideMessages: () =>
         this.drainForTargets({
           queueName,

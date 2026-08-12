@@ -2,6 +2,7 @@ import type { ZodType } from "zod";
 import type { ConnectionInfo } from "../domain/connection.ts";
 import type { Message } from "../domain/message.ts";
 import type {
+  InterruptedOperation,
   OperationSummary,
   ProcessingResult,
 } from "../domain/operation.ts";
@@ -36,18 +37,23 @@ export interface MessageBackupRepository {
   storeMessages(
     operationId: string,
     operationType: string,
+    queueName: string,
     messages: readonly Message[],
   ): boolean;
   markMessageAsProcessed(operationId: string, messageId: string): boolean;
   getUnprocessedMessages(operationId: string): Message[];
   getProcessedMessages(operationId: string): Message[];
   completeOperation(operationId: string): boolean;
+  listInterruptedOperations(): InterruptedOperation[];
+  forget(operationId: string): boolean;
+  pruneOlderThan(cutoff: number): number;
 }
 
 export interface SafeOperationCoordinator {
   executeOperation(input: {
     operationId?: string;
     operationType: string;
+    queueName: string;
     provideMessages: () => Promise<readonly Message[]>;
     process: (message: Message) => Promise<ProcessingResult>;
     onProgress?: (progress: { processed: number; total: number }) => void;

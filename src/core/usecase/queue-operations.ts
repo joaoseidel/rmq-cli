@@ -70,6 +70,7 @@ export class QueueOperations {
 
     return this.coordinator.executeOperation({
       operationType: "requeue-messages",
+      queueName: fromQueue,
       provideMessages: () =>
         this.broker.getMessages({
           queueName: fromQueue,

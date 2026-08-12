@@ -4,6 +4,7 @@ import type { Message } from "../../core/domain/message.ts";
 import type { Queue } from "../../core/domain/queue.ts";
 import type { VHost } from "../../core/domain/vhost.ts";
 import type { ActionId } from "../actions.ts";
+import type { InterruptedOperation } from "../../core/domain/operation.ts";
 import type { Job } from "../../core/usecase/jobs.ts";
 import type { ListMemory } from "../hooks/use-list-memory.ts";
 import type { Screen, ScreenName } from "../screens.ts";
@@ -17,6 +18,7 @@ import { MoveMessageScreen } from "./screens/move-message-screen.tsx";
 import { PublishScreen } from "./screens/publish-screen.tsx";
 import { QueueScreen } from "./screens/queue-screen.tsx";
 import { QueuesScreen } from "./screens/queues-screen.tsx";
+import { RecoveryScreen } from "./screens/recovery-screen.tsx";
 import { SearchScreen } from "./screens/search-screen.tsx";
 import { TransferFileScreen } from "./screens/transfer-file-screen.tsx";
 import { TransferScreen } from "./screens/transfer-screen.tsx";
@@ -51,6 +53,8 @@ export interface ScreenContext {
   ) => void;
   readonly listMemory: ListMemory;
   readonly jobs: readonly Job[];
+  readonly onRecover: (operation: InterruptedOperation) => void;
+  readonly onForget: (operation: InterruptedOperation) => void;
   readonly helpFrom: ScreenName;
   readonly filterRequested: boolean;
   readonly onFilterOpened: () => void;
@@ -278,6 +282,17 @@ export function ScreenRouter({
           onDismiss={(id) => ctx.container.jobs.dismiss(id)}
           onClear={() => ctx.container.jobs.dismissFinished()}
           width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
+        />
+      );
+
+    case "recovery":
+      return (
+        <RecoveryScreen
+          operations={ctx.container.messages}
+          onRecover={ctx.onRecover}
+          onForget={ctx.onForget}
           height={ctx.height}
           isActive={ctx.isActive}
         />

@@ -62,6 +62,20 @@ async function main(): Promise<void> {
   const container = createContainer();
   const restore = enterFullscreen();
 
+  const panic = (reason: string) => (error: unknown) => {
+    logger.error(reason, error);
+    restore();
+    process.stderr.write(`rmq stopped: ${errorMessage(error)}\n`);
+    process.stderr.write(`Details were written to ${logFilePath}\n`);
+    process.stderr.write(
+      "Any interrupted operation is recoverable: reopen rmq and press ':' then 'recover'.\n",
+    );
+    process.exit(1);
+  };
+
+  process.on("uncaughtException", panic("Uncaught exception"));
+  process.on("unhandledRejection", panic("Unhandled rejection"));
+
   try {
     const instance = render(<App container={container} />, {
       exitOnCtrlC: false,

@@ -43,6 +43,7 @@ describe("BackedUpOperationCoordinator", () => {
   it("reports every success", async () => {
     const summary = await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a"), message("b")],
       process: async (item) => success(item.id),
     });
@@ -55,6 +56,7 @@ describe("BackedUpOperationCoordinator", () => {
   it("keeps failed messages in the backup", async () => {
     const summary = await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a"), message("b")],
       process: async (item) =>
         item.payload.endsWith("a")
@@ -72,6 +74,7 @@ describe("BackedUpOperationCoordinator", () => {
   it("treats a thrown error as a failure rather than propagating", async () => {
     const summary = await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a")],
       process: async () => {
         throw new Error("broker exploded");
@@ -85,6 +88,7 @@ describe("BackedUpOperationCoordinator", () => {
   it("does nothing when there is nothing to process", async () => {
     const summary = await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [],
       process: async () => success("unused"),
     });
@@ -100,6 +104,9 @@ describe("BackedUpOperationCoordinator", () => {
       getUnprocessedMessages: () => [],
       getProcessedMessages: () => [],
       completeOperation: () => false,
+      listInterruptedOperations: () => [],
+      forget: () => false,
+      pruneOlderThan: () => 0,
     };
 
     let processed = 0;
@@ -107,6 +114,7 @@ describe("BackedUpOperationCoordinator", () => {
       brokenBackups,
     ).executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a")],
       process: async (item) => {
         processed += 1;
@@ -123,6 +131,7 @@ describe("BackedUpOperationCoordinator", () => {
 
     await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a"), message("b"), message("c")],
       process: async (item) => success(item.id),
       onProgress: ({ processed }) => seen.push(processed),
@@ -134,13 +143,14 @@ describe("BackedUpOperationCoordinator", () => {
   it("clears the backup once everything succeeded", async () => {
     const summary = await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a")],
       process: async (item) => success(item.id),
     });
 
     expect(
       repository
-        .listPendingOperations()
+        .listInterruptedOperations()
         .some((entry) => entry.id === summary.id),
     ).toBe(false);
   });
@@ -148,13 +158,14 @@ describe("BackedUpOperationCoordinator", () => {
   it("retains the backup when something failed", async () => {
     const summary = await coordinator.executeOperation({
       operationType: "test",
+      queueName: "orders",
       provideMessages: async () => [message("a")],
       process: (item) => Promise.resolve(failure(item.id, "nope")),
     });
 
     expect(
       repository
-        .listPendingOperations()
+        .listInterruptedOperations()
         .some((entry) => entry.id === summary.id),
     ).toBe(true);
   });
@@ -186,7 +197,7 @@ describe("transferring to a destination that does not exist", () => {
     ).rejects.toThrow(/does not exist/);
 
     expect(broker.payloads("orders")).toEqual(["a", "b", "c"]);
-    expect(backups.listPendingOperations()).toHaveLength(0);
+    expect(backups.listInterruptedOperations()).toHaveLength(0);
   });
 
   it("moves the messages when the destination is real", async () => {

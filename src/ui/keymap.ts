@@ -264,6 +264,16 @@ export const SCREEN_KEYS = {
       description: "forget every finished operation",
     },
   ],
+  recovery: [
+    { key: "↑↓", label: "move", displayOnly: true },
+    { key: "⏎", label: "recover", displayOnly: true },
+    {
+      key: "x",
+      label: "forget",
+      description: "discard this backup without restoring it",
+      primary: true,
+    },
+  ],
   message: [
     {
       key: "j/k",

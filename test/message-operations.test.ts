@@ -25,6 +25,7 @@ function build(seed: Record<string, string[]>) {
   const messages = new MessageOperations(
     broker,
     new BackedUpOperationCoordinator(backups),
+    backups,
   );
   return { broker, messages, backups };
 }

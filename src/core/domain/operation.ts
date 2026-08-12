@@ -16,6 +16,15 @@ export function failure(messageId: string, reason: string): ProcessingResult {
   return { status: "failure", messageId, reason };
 }
 
+export interface InterruptedOperation {
+  readonly id: string;
+  readonly type: string;
+  readonly queueName: string;
+  readonly createdAt: number;
+  readonly total: number;
+  readonly remaining: number;
+}
+
 export interface OperationProgress {
   readonly phase: string;
   readonly done: number;

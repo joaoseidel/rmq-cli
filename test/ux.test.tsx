@@ -34,17 +34,16 @@ function build(seed: Record<string, string[]>): Container {
     new FileKeySecretCipher(dir),
   );
   configStore.saveConnection(testConnection);
-  const coordinator = new BackedUpOperationCoordinator(
-    new JsonMessageBackupRepository(
-      new JsonSettingsStore({ configDir: dir, fileName: "backups" }),
-    ),
+  const backups = new JsonMessageBackupRepository(
+    new JsonSettingsStore({ configDir: dir, fileName: "backups" }),
   );
+  const coordinator = new BackedUpOperationCoordinator(backups);
 
   return {
     broker,
     connections: new ConnectionOperations(configStore, broker),
     queues: new QueueOperations(broker, coordinator),
-    messages: new MessageOperations(broker, coordinator),
+    messages: new MessageOperations(broker, coordinator, backups),
     vhosts: new VHostOperations(broker, configStore),
     jobs: new JobManager(),
   };

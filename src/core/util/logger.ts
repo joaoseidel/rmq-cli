@@ -40,7 +40,11 @@ function write(
   if (!ensureLogDir()) return;
 
   const detail = error === undefined ? "" : ` | ${errorMessage(error)}`;
-  const line = `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} [${scope}] ${message}${detail}\n`;
+  const stack =
+    error instanceof Error && error.stack !== undefined
+      ? `\n${error.stack}\n`
+      : "";
+  const line = `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} [${scope}] ${message}${detail}\n${stack}`;
 
   try {
     appendFileSync(logFile, line, "utf8");

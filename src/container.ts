@@ -31,15 +31,14 @@ export function createContainer(): Container {
     settings,
     new FileKeySecretCipher(),
   );
-  const coordinator = new BackedUpOperationCoordinator(
-    new JsonMessageBackupRepository(backupSettings),
-  );
+  const backups = new JsonMessageBackupRepository(backupSettings);
+  const coordinator = new BackedUpOperationCoordinator(backups);
 
   return {
     broker,
     connections: new ConnectionOperations(configStore, broker),
     queues: new QueueOperations(broker, coordinator),
-    messages: new MessageOperations(broker, coordinator),
+    messages: new MessageOperations(broker, coordinator, backups),
     vhosts: new VHostOperations(broker, configStore),
     jobs: new JobManager(),
   };

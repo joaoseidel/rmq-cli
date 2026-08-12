@@ -27,6 +27,7 @@ import {
 } from "../screens.ts";
 import { glyphs, theme } from "../theme.ts";
 import { Confirm } from "./common/confirm.tsx";
+import { ErrorBoundary } from "./error-boundary.tsx";
 import { CommandPalette } from "./parts/command-palette.tsx";
 import { JobIndicator } from "./parts/job-progress.tsx";
 import { RowMenu } from "./parts/row-menu.tsx";
@@ -38,6 +39,8 @@ import { ConnectionFormScreen } from "./screens/connection-form-screen.tsx";
 
 const MESSAGE_PAGE_SIZE = 200;
 const QUEUE_CONCURRENCY = 4;
+
+const BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const NOTICE_MS = 4000;
 const DANGER_NOTICE_MS = 10_000;
@@ -271,6 +274,24 @@ function AppContent({ container }: AppProps) {
     },
     [],
   );
+
+  useEffect(() => {
+    container.messages.pruneOldBackups(BACKUP_MAX_AGE_MS);
+
+    const interrupted = container.messages.listInterruptedOperations();
+    if (interrupted.length === 0) return;
+
+    const waiting = interrupted.reduce(
+      (sum, entry) => sum + entry.remaining,
+      0,
+    );
+
+    announce(
+      `${formatCount(interrupted.length, "operation")} did not finish and ${formatCount(waiting, "message")} ` +
+        "are waiting in a backup. Press ':' then 'recover'.",
+      "danger",
+    );
+  }, [container, announce]);
 
   useJobCompletions(jobs, (job) => {
     if (job.state === "failed") announce(job.error ?? "Operation failed.", "danger");
@@ -542,6 +563,9 @@ function AppContent({ container }: AppProps) {
         case "jobs":
           stack.push({ name: "jobs" });
           break;
+        case "recover":
+          stack.push({ name: "recovery" });
+          break;
         case "search-messages": {
           const { queues: scope, filter } = queueScopeRef.current;
           if (scope.length === 0) {
@@ -711,6 +735,36 @@ function AppContent({ container }: AppProps) {
     listMemory,
 
     jobs,
+    onRecover: (operation) => {
+      container.jobs.start({
+        kind: "recover",
+        title: `Restoring ${formatCount(operation.remaining, "message")} into ${operation.queueName}`,
+        run: (job) =>
+          container.broker.withConnection(active, async (channel) => {
+            const outcome = await container.messages.recoverOperation({
+              operationId: operation.id,
+              queueName: operation.queueName,
+              connection: channel,
+              onProgress: job.report,
+              isCancelled: job.isCancelled,
+            });
+
+            if (outcome.failed > 0) {
+              throw new Error(
+                `Restored ${outcome.restored}, but ${formatCount(outcome.failed, "message")} could not be put back. The backup is kept.`,
+              );
+            }
+
+            return `Restored ${formatCount(outcome.restored, "message")} into ${operation.queueName}.`;
+          }),
+      });
+
+      stack.back();
+    },
+    onForget: (operation) => {
+      container.messages.forgetOperation(operation.id);
+      announce(`Discarded the backup for operation ${operation.id.slice(0, 8)}.`);
+    },
     helpFrom: stack.previous?.name ?? "queues",
     filterRequested,
     onFilterOpened: clearFilterRequest,
@@ -780,7 +834,9 @@ function AppContent({ container }: AppProps) {
           />
         </Box>
       ) : (
-        <ScreenRouter screen={screen} ctx={screenContext} />
+        <ErrorBoundary onQuit={exit} onRecover={stack.reset}>
+          <ScreenRouter screen={screen} ctx={screenContext} />
+        </ErrorBoundary>
       )}
     </ScreenFrame>
   );

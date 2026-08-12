@@ -29,6 +29,7 @@ export type Screen =
   | { readonly name: "connection-form" }
   | { readonly name: "vhosts" }
   | { readonly name: "jobs" }
+  | { readonly name: "recovery" }
   | { readonly name: "help" };
 
 export type ScreenName = Screen["name"];
@@ -84,6 +85,8 @@ export function screenTitle(screen: Screen): string {
       return "Virtual hosts";
     case "jobs":
       return "Background jobs";
+    case "recovery":
+      return "Recover interrupted work";
     case "help":
       return "Help";
   }

@@ -20,6 +20,7 @@ export class BackedUpOperationCoordinator implements SafeOperationCoordinator {
   async executeOperation(input: {
     operationId?: string;
     operationType: string;
+    queueName: string;
     provideMessages: () => Promise<readonly Message[]>;
     process: (message: Message) => Promise<ProcessingResult>;
     onProgress?: (progress: { processed: number; total: number }) => void;
@@ -31,7 +32,12 @@ export class BackedUpOperationCoordinator implements SafeOperationCoordinator {
     if (messages.length === 0) return emptySummary(operationId);
 
     if (
-      !this.backups.storeMessages(operationId, input.operationType, messages)
+      !this.backups.storeMessages(
+        operationId,
+        input.operationType,
+        input.queueName,
+        messages,
+      )
     ) {
       logger.error(
         `Failed to back up ${messages.length} messages for operation ${operationId}`,
