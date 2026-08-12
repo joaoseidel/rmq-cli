@@ -20,6 +20,7 @@ export const ACTION_IDS = [
   "add-connection",
   "vhosts",
   "jobs",
+  "recover",
   "help",
   "quit",
 ] as const;
@@ -43,6 +44,7 @@ const EVERYWHERE: readonly Screen["name"][] = [
   "connection-form",
   "vhosts",
   "jobs",
+  "recovery",
   "help",
 ];
 
@@ -155,6 +157,11 @@ const SPECS: Record<ActionId, ActionSpec> = {
     label: "Background jobs",
     hint: "watch, cancel, or clear running operations",
     from: EVERYWHERE.filter((name) => name !== "jobs"),
+  },
+  recover: {
+    label: "Recover interrupted work",
+    hint: "put back messages left over from an operation that was cut short",
+    from: EVERYWHERE.filter((name) => name !== "recovery"),
   },
   help: {
     label: "Help",
