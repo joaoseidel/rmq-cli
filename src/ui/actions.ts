@@ -13,6 +13,7 @@ export const ACTION_IDS = [
   "export",
   "import",
   "transfer",
+  "reprocess-queue",
   "delete-message",
   "requeue-message",
   "reprocess-message",
@@ -119,6 +120,13 @@ const SPECS: Record<ActionId, ActionSpec> = {
     label: "Move messages",
     hint: "requeue from one queue to another",
     from: ["queues", "queue"],
+    needs: "queue",
+  },
+  "reprocess-queue": {
+    label: "Reprocess queue",
+    hint: "republish every message to the exchange it came from",
+    from: ["queues", "queue"],
+    needs: "queue",
   },
   "delete-message": {
     label: "Delete message",

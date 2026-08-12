@@ -80,8 +80,14 @@ export const SCREEN_KEYS = {
     {
       key: "m",
       label: "move",
-      description: "move messages between queues",
+      description: "move messages out of the marked queues, or this one",
       action: "transfer",
+    },
+    {
+      key: "R",
+      label: "reprocess",
+      description: "republish every message to the exchange it came from",
+      action: "reprocess-queue",
     },
     {
       key: "c",
