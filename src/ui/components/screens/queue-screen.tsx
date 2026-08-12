@@ -1,12 +1,14 @@
 import { Box, Text } from "ink";
+import type { ConnectionInfo } from "../../../core/domain/connection.ts";
 import type { Message } from "../../../core/domain/message.ts";
+import { totalMessages, type Queue } from "../../../core/domain/queue.ts";
+import type { MessageOperations } from "../../../core/usecase/message-operations.ts";
 import { searchableText } from "../../../core/usecase/message-query.ts";
-import type { Queue } from "../../../core/domain/queue.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import type { ActionId } from "../../actions.ts";
-import { useAsync } from "../../hooks/use-async.ts";
 import { useFilterableList } from "../../hooks/use-filterable-list.ts";
 import type { ListMemory } from "../../hooks/use-list-memory.ts";
+import { usePeekSession } from "../../hooks/use-peek-session.ts";
 import { useScreenKeys } from "../../hooks/use-screen-keys.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { FilterBar } from "../parts/filter-bar.tsx";
@@ -16,7 +18,10 @@ import { MessageTable } from "../parts/tables.tsx";
 
 export interface QueueScreenProps {
   readonly queue: Queue;
-  readonly loadMessages: (queue: Queue) => Promise<Message[]>;
+  readonly operations: MessageOperations;
+  readonly connection: ConnectionInfo;
+  readonly pageSize: number;
+  readonly reloadToken: number;
   readonly onOpen: (message: Message) => void;
   readonly onSelectionChange: (message: Message | null) => void;
   readonly onAction: (id: ActionId) => void;
@@ -34,7 +39,10 @@ const messageKey = (message: Message) => message.id;
 
 export function QueueScreen({
   queue,
-  loadMessages,
+  operations,
+  connection,
+  pageSize,
+  reloadToken,
   onOpen,
   onSelectionChange,
   onAction,
@@ -46,14 +54,16 @@ export function QueueScreen({
   height,
   isActive,
 }: QueueScreenProps) {
-  const { state } = useAsync(
-    () => loadMessages(queue),
-    [loadMessages, queue.name],
-  );
-  const messages = state.status === "success" ? state.data : [];
+  const peek = usePeekSession({
+    operations,
+    connection,
+    queueName: queue.name,
+    pageSize,
+    reloadToken,
+  });
 
   const list = useFilterableList<Message>({
-    items: messages,
+    items: peek.messages,
     searchable: searchableFields,
     height,
     isActive,
@@ -74,17 +84,26 @@ export function QueueScreen({
       "/": list.startFiltering,
       " ": list.toggleMark,
       a: list.toggleMarkAll,
+      "]": peek.loadMore,
     },
   });
 
-  if (state.status === "pending")
+  if (peek.loading && peek.messages.length === 0)
     return <Spinner label={`Loading messages from ${queue.name}…`} />;
-  if (state.status === "failure")
+
+  if (peek.error !== null && peek.messages.length === 0)
     return (
-      <StatusMessage tone="danger">{errorMessage(state.error)}</StatusMessage>
+      <StatusMessage tone="danger">{errorMessage(peek.error)}</StatusMessage>
     );
 
   const [start, end] = list.visibleRange;
+  const depth = totalMessages(queue);
+  const held = peek.messages.length;
+
+  const reach =
+    peek.exhausted || held >= depth
+      ? `all ${formatCount(held, "message")}`
+      : `${held.toLocaleString()} of ${depth.toLocaleString()}`;
 
   return (
     <Box flexDirection="column">
@@ -110,8 +129,22 @@ export function QueueScreen({
             {list.marked.length === 0
               ? ""
               : ` ${glyphs.bullet} ${formatCount(list.marked.length, "message")} marked`}{" "}
-            {glyphs.bullet} previewed, not consumed
+            {glyphs.bullet} showing{" "}
+            <Text color={peek.exhausted ? theme.muted : theme.info}>
+              {reach}
+            </Text>{" "}
+            {glyphs.bullet}{" "}
+            {peek.loading
+              ? "loading more…"
+              : peek.exhausted
+                ? "previewed, not consumed"
+                : "] for more"}
           </Text>
+          {peek.error === null ? null : (
+            <StatusMessage tone="danger">
+              {errorMessage(peek.error)}
+            </StatusMessage>
+          )}
         </>
       )}
     </Box>

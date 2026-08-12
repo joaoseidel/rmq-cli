@@ -3,7 +3,9 @@ import type { CompositeMessageId } from "../domain/message-id.ts";
 import type { Message } from "../domain/message.ts";
 import {
   failure,
+  isRecoverable,
   success,
+  type BackupOrigin,
   type InterruptedOperation,
   type ProgressReporter,
 } from "../domain/operation.ts";
@@ -94,6 +96,37 @@ export interface RemovalOutcome {
   readonly unprocessedMessages: readonly Message[];
 }
 
+export function originOf(
+  queueName: string,
+  connection: BrokerConnection,
+): BackupOrigin {
+  return {
+    queueName,
+    connectionId: connection.info.id,
+    vhost: connection.info.vHost.name,
+  };
+}
+
+export function scopeOf(connection: BrokerConnection): {
+  connectionId: string;
+  vhost: string;
+} {
+  return {
+    connectionId: connection.info.id,
+    vhost: connection.info.vHost.name,
+  };
+}
+
+export interface PeekPage {
+  readonly messages: readonly Message[];
+  readonly exhausted: boolean;
+}
+
+export interface PeekSession {
+  next(count: number): Promise<PeekPage>;
+  close(): Promise<void>;
+}
+
 export interface RecoveryOutcome {
   readonly restored: number;
   readonly failed: number;
@@ -106,8 +139,11 @@ export class MessageOperations {
     private readonly backups: MessageBackupRepository,
   ) {}
 
-  listInterruptedOperations(): InterruptedOperation[] {
-    return this.backups.listInterruptedOperations();
+  listInterruptedOperations(scope?: {
+    connectionId: string;
+    vhost: string;
+  }): InterruptedOperation[] {
+    return this.backups.listInterruptedOperations(scope);
   }
 
   forgetOperation(operationId: string): boolean {
@@ -120,12 +156,32 @@ export class MessageOperations {
 
   async recoverOperation(input: {
     operationId: string;
-    queueName: string;
+    origin: BackupOrigin;
     connection: BrokerConnection;
     onProgress?: ProgressReporter;
     isCancelled?: () => boolean;
   }): Promise<RecoveryOutcome> {
-    const { operationId, queueName, connection } = input;
+    const { operationId, origin, connection } = input;
+
+    if (!isRecoverable(origin)) {
+      throw new Error(
+        "This backup does not record where its messages came from, so rmq cannot put them back safely. " +
+          "Export it from the backup file by hand instead.",
+      );
+    }
+
+    const here = scopeOf(connection);
+    if (
+      origin.connectionId !== here.connectionId ||
+      origin.vhost !== here.vhost
+    ) {
+      throw new Error(
+        `These messages came from a different broker or vhost (${origin.connectionId}, vhost ${origin.vhost}). ` +
+          "Switch to it before recovering, so they are not published to the wrong place.",
+      );
+    }
+
+    const queueName = origin.queueName;
     const pending = this.backups.getUnprocessedMessages(operationId);
 
     let restored = 0;
@@ -207,6 +263,52 @@ export class MessageOperations {
     connection: BrokerConnection,
   ): Promise<Message[]> {
     return this.broker.getMessages({ queueName, count, ack, connection });
+  }
+
+  async openPeekSession(input: {
+    queueName: string;
+    info: ConnectionInfo;
+  }): Promise<PeekSession> {
+    const { queueName, info } = input;
+    const connection = await this.broker.connect(info);
+    const cursored = connection.channel !== null;
+
+    let read = 0;
+    let exhausted = false;
+
+    return {
+      next: async (count: number): Promise<PeekPage> => {
+        if (exhausted) return { messages: [], exhausted: true };
+
+        const wanted = cursored ? count : read + count;
+        let fetched: readonly Message[];
+
+        try {
+          fetched = await this.broker.getMessages({
+            queueName,
+            count: wanted,
+            ack: false,
+            connection,
+          });
+        } catch (error) {
+          if (!(error instanceof PartialReadError)) throw error;
+          fetched = error.messages;
+          exhausted = true;
+        }
+
+        const page = cursored ? fetched : fetched.slice(read);
+        read += page.length;
+
+        if (page.length < count) exhausted = true;
+        if (!cursored) await connection.requeueAll();
+
+        return { messages: page, exhausted };
+      },
+      close: async () => {
+        await connection.requeueAll();
+        await connection.close();
+      },
+    };
   }
 
   async searchMessages(input: {
@@ -366,7 +468,7 @@ export class MessageOperations {
 
     const summary = await this.coordinator.executeOperation({
       operationType: "remove-messages",
-      queueName,
+      origin: originOf(queueName, connection),
       provideMessages: () =>
         this.drainForTargets({
           queueName,

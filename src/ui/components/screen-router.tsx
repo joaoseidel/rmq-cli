@@ -33,7 +33,8 @@ export interface ScreenContext {
   readonly height: number;
   readonly isActive: boolean;
   readonly loadQueues: () => Promise<Queue[]>;
-  readonly loadMessages: (queue: Queue) => Promise<Message[]>;
+  readonly messagePageSize: number;
+  readonly reloadToken: number;
   readonly announce: (text: string, tone?: Tone) => void;
   readonly refresh: () => void;
   readonly runAction: (id: ActionId) => void;
@@ -53,6 +54,7 @@ export interface ScreenContext {
   ) => void;
   readonly listMemory: ListMemory;
   readonly jobs: readonly Job[];
+  readonly scope: { readonly connectionId: string; readonly vhost: string };
   readonly onRecover: (operation: InterruptedOperation) => void;
   readonly onForget: (operation: InterruptedOperation) => void;
   readonly helpFrom: ScreenName;
@@ -90,7 +92,10 @@ export function ScreenRouter({
       return (
         <QueueScreen
           queue={screen.queue}
-          loadMessages={ctx.loadMessages}
+          operations={ctx.container.messages}
+          connection={ctx.connection}
+          pageSize={ctx.messagePageSize}
+          reloadToken={ctx.reloadToken}
           openFilter={ctx.filterRequested}
           onFilterOpened={ctx.onFilterOpened}
           onSelectionChange={ctx.onMessageSelectionChange}
@@ -291,6 +296,7 @@ export function ScreenRouter({
       return (
         <RecoveryScreen
           operations={ctx.container.messages}
+          scope={ctx.scope}
           onRecover={ctx.onRecover}
           onForget={ctx.onForget}
           height={ctx.height}

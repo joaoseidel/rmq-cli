@@ -100,6 +100,12 @@ export const SCREEN_KEYS = {
     { key: "↑↓", label: "move", displayOnly: true },
     { key: "⏎", label: "inspect", displayOnly: true },
     {
+      key: "]",
+      label: "more",
+      description: "peek the next page of messages",
+      primary: true,
+    },
+    {
       key: "/",
       label: "filter",
       description: "filter the list",

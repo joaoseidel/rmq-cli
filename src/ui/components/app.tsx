@@ -70,6 +70,7 @@ interface Notice {
 
 export interface AppProps {
   readonly container: Container;
+  readonly pageSize?: number;
 }
 
 const ROW_MENU_HINTS: KeyHint[] = [
@@ -187,7 +188,7 @@ function confirmationFor(pending: PendingAction): string {
     : `Delete ${formatCount(pending.messages.length, "message")} from '${pending.queue.name}'? The rest of the queue is put back.`;
 }
 
-function AppContent({ container }: AppProps) {
+function AppContent({ container, pageSize }: AppProps) {
   const { columns, rows } = useTerminalSize();
   const { exit } = useApp();
 
@@ -278,7 +279,12 @@ function AppContent({ container }: AppProps) {
   useEffect(() => {
     container.messages.pruneOldBackups(BACKUP_MAX_AGE_MS);
 
-    const interrupted = container.messages.listInterruptedOperations();
+    if (connection === null) return;
+
+    const interrupted = container.messages.listInterruptedOperations({
+      connectionId: connection.id,
+      vhost: connection.vHost.name,
+    });
     if (interrupted.length === 0) return;
 
     const waiting = interrupted.reduce(
@@ -291,7 +297,7 @@ function AppContent({ container }: AppProps) {
         "are waiting in a backup. Press ':' then 'recover'.",
       "danger",
     );
-  }, [container, announce]);
+  }, [container, connection, announce]);
 
   useJobCompletions(jobs, (job) => {
     if (job.state === "failed") announce(job.error ?? "Operation failed.", "danger");
@@ -318,21 +324,6 @@ function AppContent({ container }: AppProps) {
       container.queues.listQueues(open, null),
     );
   }, [container, connection, reloadToken]);
-
-  const loadMessages = useCallback(
-    async (queue: Queue) => {
-      if (connection === null) return [];
-      return container.broker.withConnection(connection, (open) =>
-        container.messages.getMessages(
-          queue.name,
-          MESSAGE_PAGE_SIZE,
-          false,
-          open,
-        ),
-      );
-    },
-    [container, connection, reloadToken],
-  );
 
   const runPending = useCallback(
     (action: PendingAction) => {
@@ -683,6 +674,10 @@ function AppContent({ container }: AppProps) {
   }
 
   const active = connection;
+  const scope = {
+    connectionId: active.id,
+    vhost: active.vHost.name,
+  };
 
   const contextFor = (open: Overlay) => ({
     screen: screen.name,
@@ -699,7 +694,8 @@ function AppContent({ container }: AppProps) {
     height: contentHeight,
     isActive: interactive,
     loadQueues,
-    loadMessages,
+    messagePageSize: pageSize ?? MESSAGE_PAGE_SIZE,
+    reloadToken,
     announce,
     refresh,
     runAction,
@@ -735,15 +731,16 @@ function AppContent({ container }: AppProps) {
     listMemory,
 
     jobs,
+    scope,
     onRecover: (operation) => {
       container.jobs.start({
         kind: "recover",
-        title: `Restoring ${formatCount(operation.remaining, "message")} into ${operation.queueName}`,
+        title: `Restoring ${formatCount(operation.remaining, "message")} into ${operation.origin.queueName}`,
         run: (job) =>
           container.broker.withConnection(active, async (channel) => {
             const outcome = await container.messages.recoverOperation({
               operationId: operation.id,
-              queueName: operation.queueName,
+              origin: operation.origin,
               connection: channel,
               onProgress: job.report,
               isCancelled: job.isCancelled,
@@ -755,7 +752,7 @@ function AppContent({ container }: AppProps) {
               );
             }
 
-            return `Restored ${formatCount(outcome.restored, "message")} into ${operation.queueName}.`;
+            return `Restored ${formatCount(outcome.restored, "message")} into ${operation.origin.queueName}.`;
           }),
       });
 

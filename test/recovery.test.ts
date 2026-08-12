@@ -8,6 +8,12 @@ import { JsonSettingsStore } from "../src/adapters/storage/json-settings-store.t
 import { MessageOperations } from "../src/core/usecase/message-operations.ts";
 import { FakeBroker, testConnection } from "./fake-broker.ts";
 
+const ORIGIN = {
+  queueName: "orders",
+  connectionId: testConnection.id,
+  vhost: testConnection.vHost.name,
+};
+
 function build(seed: Record<string, string[]>) {
   const broker = new FakeBroker(seed);
   const backups = new JsonMessageBackupRepository(
@@ -54,7 +60,8 @@ describe("recovering an operation that was cut short", () => {
 
     expect(pending).toHaveLength(1);
     expect(pending[0]?.id).toBe(outcome.operationId);
-    expect(pending[0]?.queueName).toBe("orders");
+    expect(pending[0]?.origin.queueName).toBe("orders");
+    expect(pending[0]?.recoverable).toBe(true);
     expect(pending[0]?.type).toBe("remove-messages");
     expect(pending[0]?.remaining).toBe(3);
   });
@@ -70,7 +77,7 @@ describe("recovering an operation that was cut short", () => {
       (open) =>
         context.messages.recoverOperation({
           operationId: outcome.operationId,
-          queueName: "orders",
+          origin: ORIGIN,
           connection: open,
         }),
     );
@@ -102,7 +109,7 @@ describe("recovering an operation that was cut short", () => {
     await context.broker.withConnection(testConnection, (open) =>
       context.messages.recoverOperation({
         operationId: outcome.operationId,
-        queueName: "orders",
+        origin: ORIGIN,
         connection: open,
       }),
     );
@@ -124,7 +131,7 @@ describe("recovering an operation that was cut short", () => {
       (open) =>
         context.messages.recoverOperation({
           operationId: outcome.operationId,
-          queueName: "orders",
+          origin: ORIGIN,
           connection: open,
         }),
     );
@@ -142,7 +149,7 @@ describe("recovering an operation that was cut short", () => {
     await context.broker.withConnection(testConnection, (open) =>
       context.messages.recoverOperation({
         operationId: outcome.operationId,
-        queueName: "orders",
+        origin: ORIGIN,
         connection: open,
         isCancelled: () => seen++ >= 1,
       }),
@@ -154,7 +161,7 @@ describe("recovering an operation that was cut short", () => {
     await context.broker.withConnection(testConnection, (open) =>
       context.messages.recoverOperation({
         operationId: outcome.operationId,
-        queueName: "orders",
+        origin: ORIGIN,
         connection: open,
       }),
     );
@@ -177,5 +184,94 @@ describe("recovering an operation that was cut short", () => {
 
     expect(context.messages.pruneOldBackups(0)).toBe(0);
     expect(context.messages.listInterruptedOperations()).toHaveLength(1);
+  });
+});
+
+describe("keeping a recovery inside the broker it came from", () => {
+  const otherBroker = {
+    ...testConnection,
+    id: "elsewhere",
+    name: "elsewhere",
+  };
+
+  it("only lists backups belonging to the connection being browsed", async () => {
+    const context = build({ orders: ["a", "b", "c"] });
+    await interrupt(context);
+
+    expect(
+      context.messages.listInterruptedOperations({
+        connectionId: testConnection.id,
+        vhost: testConnection.vHost.name,
+      }),
+    ).toHaveLength(1);
+
+    expect(
+      context.messages.listInterruptedOperations({
+        connectionId: "elsewhere",
+        vhost: testConnection.vHost.name,
+      }),
+    ).toHaveLength(0);
+
+    expect(
+      context.messages.listInterruptedOperations({
+        connectionId: testConnection.id,
+        vhost: "/other",
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("refuses to publish the messages into a different broker", async () => {
+    const context = build({ orders: ["a", "b", "c"] });
+    const outcome = await interrupt(context);
+
+    await expect(
+      context.broker.withConnection(otherBroker, (open) =>
+        context.messages.recoverOperation({
+          operationId: outcome.operationId,
+          origin: ORIGIN,
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/different broker or vhost/);
+
+    expect(context.broker.payloads("orders")).toEqual([]);
+    expect(context.messages.listInterruptedOperations()).toHaveLength(1);
+  });
+
+  it("refuses to publish the messages into a different vhost", async () => {
+    const context = build({ orders: ["a", "b", "c"] });
+    const outcome = await interrupt(context);
+
+    const otherVHost = {
+      ...testConnection,
+      vHost: { ...testConnection.vHost, name: "/staging" },
+    };
+
+    await expect(
+      context.broker.withConnection(otherVHost, (open) =>
+        context.messages.recoverOperation({
+          operationId: outcome.operationId,
+          origin: ORIGIN,
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/different broker or vhost/);
+  });
+
+  it("refuses a backup that does not record where it came from", async () => {
+    const context = build({ orders: ["a", "b", "c"] });
+    const outcome = await interrupt(context);
+
+    await expect(
+      context.broker.withConnection(testConnection, (open) =>
+        context.messages.recoverOperation({
+          operationId: outcome.operationId,
+          origin: { queueName: "", connectionId: "", vhost: "" },
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/does not record where its messages came from/);
+
+    expect(context.broker.payloads("orders")).toEqual([]);
   });
 });

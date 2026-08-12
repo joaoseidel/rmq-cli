@@ -59,6 +59,8 @@ export class FakeBroker implements BrokerClient {
   readonly rejectReadsFrom = new Set<string>();
   readonly failReadsAfter = new Map<string, number>();
   readonly published: PublishRecord[] = [];
+  readonly held = new WeakMap<BrokerConnection, Map<string, number>>();
+  cursored = false;
   connectionsOpened = 0;
 
   constructor(seed: Record<string, string[]> = {}) {
@@ -115,13 +117,28 @@ export class FakeBroker implements BrokerClient {
 
   async connect(info: ConnectionInfo): Promise<BrokerConnection> {
     this.connectionsOpened += 1;
-    return {
+
+    if (!this.cursored) {
+      return {
+        info,
+        channel: null,
+        ackAll: async () => {},
+        requeueAll: async () => {},
+        close: async () => {},
+      };
+    }
+
+    const held = new Map<string, number>();
+    const connection: BrokerConnection = {
       info,
-      channel: null,
-      ackAll: async () => {},
-      requeueAll: async () => {},
-      close: async () => {},
+      channel: {} as never,
+      ackAll: async () => held.clear(),
+      requeueAll: async () => held.clear(),
+      close: async () => held.clear(),
     };
+
+    this.held.set(connection, held);
+    return connection;
   }
 
   async testConnection(): Promise<boolean> {
@@ -157,18 +174,26 @@ export class FakeBroker implements BrokerClient {
     queueName: string;
     count: number;
     ack?: boolean;
+    connection?: BrokerConnection;
   }): Promise<Message[]> {
     if (this.rejectReadsFrom.has(input.queueName)) {
       throw new Error(`NOT_FOUND - no queue '${input.queueName}'`);
     }
 
     const queue = this.contents(input.queueName);
+    const cursor =
+      input.ack === true || input.connection === undefined
+        ? 0
+        : (this.held.get(input.connection)?.get(input.queueName) ?? 0);
+
+    const available = queue.length - cursor;
     const cap = this.failReadsAfter.get(input.queueName);
-    const wanted = Math.min(input.count, queue.length);
-    const taken = queue.slice(0, cap === undefined ? wanted : Math.min(cap, wanted));
+    const wanted = Math.min(input.count, Math.max(0, available));
+    const size = cap === undefined ? wanted : Math.min(cap, wanted);
+    const taken = queue.slice(cursor, cursor + size);
 
     const read = taken.map((entry, index) =>
-      this.toMessage(input.queueName, entry, index),
+      this.toMessage(input.queueName, entry, cursor + index),
     );
 
     if (cap !== undefined && wanted > cap) {
@@ -179,7 +204,11 @@ export class FakeBroker implements BrokerClient {
       );
     }
 
-    if (input.ack === true) queue.splice(0, taken.length);
+    if (input.ack === true) {
+      queue.splice(0, taken.length);
+    } else if (input.connection !== undefined) {
+      this.held.get(input.connection)?.set(input.queueName, cursor + size);
+    }
 
     return read;
   }
