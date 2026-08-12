@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/joaoseidel/rmq-cli/compare/v2.2.0...v2.3.0) (2026-08-12)
+
+
+### Features
+
+* move and reprocess whole queues, not one message at a time ([e4b153f](https://github.com/joaoseidel/rmq-cli/commit/e4b153faa6bef405c802fcf54eeab0c15d499ba2))
+
 # [2.2.0](https://github.com/joaoseidel/rmq-cli/compare/v2.1.0...v2.2.0) (2026-08-12)
 
 
