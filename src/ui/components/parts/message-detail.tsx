@@ -1,7 +1,11 @@
 import { Box, Text } from "ink";
 import { displayExchange, type Message } from "../../../core/domain/message.ts";
 import { borders, theme } from "../../theme.ts";
-import { displayWidth } from "../../utils/width.ts";
+import {
+  displayWidth,
+  truncateToWidth,
+  wrapToWidth,
+} from "../../utils/width.ts";
 
 function formatPayload(payload: string): string {
   const trimmed = payload.trim();
@@ -14,8 +18,10 @@ function formatPayload(payload: string): string {
   }
 }
 
-export function formatPayloadLines(payload: string): string[] {
-  return formatPayload(payload).split("\n");
+export function formatPayloadLines(payload: string, width: number): string[] {
+  return formatPayload(payload)
+    .split("\n")
+    .flatMap((line) => wrapToWidth(line, width));
 }
 
 function windowPayload(
@@ -31,19 +37,25 @@ function windowPayload(
   return lines.slice(start, start + window.height).join("\n");
 }
 
+function entryValueWidth(key: string, width: number): number {
+  return Math.max(4, width - displayWidth(key) - 4);
+}
+
 function Field({
   label,
   value,
+  labelWidth,
   width,
 }: {
   readonly label: string;
   readonly value: string;
+  readonly labelWidth: number;
   readonly width: number;
 }) {
   return (
     <Box>
-      <Text color={theme.muted}>{label.padEnd(width)} </Text>
-      <Text>{value}</Text>
+      <Text color={theme.muted}>{label.padEnd(labelWidth)} </Text>
+      <Text>{truncateToWidth(value, Math.max(4, width - labelWidth - 1))}</Text>
     </Box>
   );
 }
@@ -79,7 +91,13 @@ export function MessageDetail({
   return (
     <Box flexDirection="column">
       {entries.map(([label, value]) => (
-        <Field key={label} label={label} value={value} width={labelWidth} />
+        <Field
+          key={label}
+          label={label}
+          value={value}
+          labelWidth={labelWidth}
+          width={width}
+        />
       ))}
 
       {verbose && properties.length > 0 ? (
@@ -89,7 +107,7 @@ export function MessageDetail({
             <Text key={key}>
               {"  "}
               <Text color={theme.muted}>{key}: </Text>
-              {value}
+              {truncateToWidth(value, entryValueWidth(key, width))}
             </Text>
           ))}
         </Box>
@@ -102,7 +120,7 @@ export function MessageDetail({
             <Text key={key}>
               {"  "}
               <Text color={theme.muted}>{key}: </Text>
-              {value}
+              {truncateToWidth(value, entryValueWidth(key, width))}
             </Text>
           ))}
         </Box>

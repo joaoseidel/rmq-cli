@@ -96,11 +96,12 @@ function SelectComponent<V>({
         const selected = index === navigation.selectedIndex;
 
         return (
-          <Box key={`${String(item.value)}-${index}`}>
-            <Text color={selected ? theme.info : undefined}>
+          <Box key={`${String(item.value)}-${index}`} flexWrap="nowrap">
+            <Text wrap="truncate" color={selected ? theme.info : undefined}>
               {selected ? `${glyphs.cursor} ` : "  "}
             </Text>
             <Text
+              wrap="truncate"
               color={
                 item.disabled === true
                   ? theme.muted
@@ -116,7 +117,7 @@ function SelectComponent<V>({
                 : truncateToWidth(item.label, Math.max(4, width - 4))}
             </Text>
             {item.detail === undefined ? null : (
-              <Text color={theme.muted}>
+              <Text wrap="truncate" color={theme.muted}>
                 {truncateToWidth(
                   item.detail,
                   Math.max(4, width - labelColumn - 4),

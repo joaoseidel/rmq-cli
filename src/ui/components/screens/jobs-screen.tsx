@@ -4,6 +4,7 @@ import { formatDuration } from "../../../core/util/progress.ts";
 import { useListNavigation } from "../../hooks/use-list-navigation.ts";
 import { useScreenKeys } from "../../hooks/use-screen-keys.ts";
 import { glyphs, theme } from "../../theme.ts";
+import { toSingleLine } from "../../utils/width.ts";
 import { describeProgress, ProgressBar } from "../parts/job-progress.tsx";
 import { StatusMessage } from "../parts/status-message.tsx";
 
@@ -88,7 +89,7 @@ export function JobsScreen({
 
         return (
           <Box key={job.id} flexDirection="column">
-            <Text>
+            <Text wrap="truncate">
               <Text color={isCursor ? theme.info : theme.muted}>
                 {isCursor ? glyphs.cursor : " "}{" "}
               </Text>
@@ -96,7 +97,7 @@ export function JobsScreen({
                 {job.title}
               </Text>
             </Text>
-            <Text>
+            <Text wrap="truncate">
               {"    "}
               {job.progress === null ? null : (
                 <>
@@ -108,7 +109,9 @@ export function JobsScreen({
                   <Text> </Text>
                 </>
               )}
-              <Text color={theme.muted}>{statusFor(job, now)}</Text>
+              <Text color={theme.muted}>
+                {toSingleLine(statusFor(job, now))}
+              </Text>
             </Text>
           </Box>
         );

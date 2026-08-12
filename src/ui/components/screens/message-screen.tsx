@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Message } from "../../../core/domain/message.ts";
 import type { ActionId } from "../../actions.ts";
 import { useKeyHandler } from "../../hooks/use-key-handler.ts";
@@ -40,8 +40,8 @@ export function MessageScreen({
   const [showMetadata, setShowMetadata] = useState(true);
 
   const payloadLines = useMemo(
-    () => formatPayloadLines(message.payload),
-    [message.payload],
+    () => formatPayloadLines(message.payload, Math.max(10, width)),
+    [message.payload, width],
   );
   const totalLines = payloadLines.length;
   const windowHeight = Math.max(
@@ -50,6 +50,10 @@ export function MessageScreen({
   );
   const maxOffset = Math.max(0, totalLines - windowHeight);
   const clipped = totalLines > windowHeight;
+
+  useEffect(() => {
+    setOffset((current) => Math.min(current, maxOffset));
+  }, [maxOffset]);
 
   useKeyHandler(
     (input, key) => {

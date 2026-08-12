@@ -8,7 +8,7 @@ import type { QueueOperations } from "../../../core/usecase/queue-operations.ts"
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import { useScreenKeys } from "../../hooks/use-screen-keys.ts";
 import { glyphs, theme } from "../../theme.ts";
-import { truncateToWidth } from "../../utils/width.ts";
+import { toSingleLine, truncateToWidth } from "../../utils/width.ts";
 import { Spinner } from "../parts/spinner.tsx";
 import { StatusMessage } from "../parts/status-message.tsx";
 
@@ -167,7 +167,7 @@ export function ConsumeScreen({
 
       {visible.map((entry) => (
         <Box key={entry.index} flexDirection="column">
-          <Text>
+          <Text wrap="truncate">
             <Text color={theme.success}>{glyphs.check} </Text>
             <Text color={theme.muted}>
               {timestamp(entry.at)} #{entry.index} {glyphs.bullet}{" "}
@@ -175,9 +175,12 @@ export function ConsumeScreen({
               {entry.message.routingKey}
             </Text>
           </Text>
-          <Text>
+          <Text wrap="truncate">
             {"  "}
-            {truncateToWidth(entry.message.payload, Math.max(20, width - 2))}
+            {truncateToWidth(
+              toSingleLine(entry.message.payload),
+              Math.max(20, width - 2),
+            )}
           </Text>
         </Box>
       ))}
