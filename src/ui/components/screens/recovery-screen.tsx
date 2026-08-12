@@ -85,7 +85,7 @@ export function RecoveryScreen({
         const isCursor = start + index === navigation.selectedIndex;
 
         return (
-          <Text key={entry.id}>
+          <Text key={entry.id} wrap="truncate">
             <Text color={isCursor ? theme.info : theme.muted}>
               {isCursor ? glyphs.cursor : " "}{" "}
             </Text>

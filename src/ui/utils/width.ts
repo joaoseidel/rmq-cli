@@ -50,6 +50,31 @@ export function padToWidth(
   return align === "right" ? padding + clipped : clipped + padding;
 }
 
+export function wrapToWidth(value: string, width: number): string[] {
+  const max = Math.max(1, width);
+  if (displayWidth(value) <= max) return [value];
+
+  const rows: string[] = [];
+  let current = "";
+  let currentWidth = 0;
+
+  for (const character of value) {
+    const characterWidth = glyphWidth(character);
+
+    if (current !== "" && currentWidth + characterWidth > max) {
+      rows.push(current);
+      current = "";
+      currentWidth = 0;
+    }
+
+    current += character;
+    currentWidth += characterWidth;
+  }
+
+  if (current !== "") rows.push(current);
+  return rows;
+}
+
 export function toSingleLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }

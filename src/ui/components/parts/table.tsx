@@ -144,7 +144,11 @@ function Rule({
     borders.horizontal.repeat(width + CELL_PADDING * 2),
   );
 
-  return <Text color={theme.border}>{left + segments.join(join) + right}</Text>;
+  return (
+    <Text color={theme.border} wrap="truncate">
+      {left + segments.join(join) + right}
+    </Text>
+  );
 }
 
 export function Table<T>({
@@ -174,7 +178,7 @@ export function Table<T>({
     <Box flexDirection="column">
       <Rule widths={widths} kind="top" />
 
-      <Text>
+      <Text wrap="truncate">
         {border}
         {columns_.map((column, index) => (
           <Text key={column.key}>
@@ -194,7 +198,7 @@ export function Table<T>({
         const selected = selectedIndex === rowIndex;
 
         return (
-          <Text key={rowKey?.(row, rowIndex) ?? String(rowIndex)}>
+          <Text key={rowKey?.(row, rowIndex) ?? String(rowIndex)} wrap="truncate">
             {border}
             {columns_.map((column, index) => {
               const width = widths[index] ?? 0;
