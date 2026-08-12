@@ -755,7 +755,10 @@ describe("running operations in the background", () => {
     await settle();
 
     expect(broker.payloads("orders")).toEqual(["b", "c"]);
-    expect(lastFrame()).toContain("Deleted 1 message from orders");
+    expect(lastFrame()).toContain("Deleted 1 message from orders.");
+    expect(lastFrame()).toContain(
+      "2 other messages were re-queued to get at it.",
+    );
 
     unmount();
   });

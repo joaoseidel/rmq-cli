@@ -6,7 +6,10 @@ import type { Queue } from "../../../core/domain/queue.ts";
 import type { BrokerClient } from "../../../core/ports/broker.ts";
 import type { JobManager } from "../../../core/usecase/jobs.ts";
 import type { MessageOperations } from "../../../core/usecase/message-operations.ts";
-import { formatCount } from "../../../core/util/text.ts";
+import {
+  formatCount,
+  repositionedNote,
+} from "../../../core/util/text.ts";
 import { useQueueNames } from "../../hooks/use-queue-names.ts";
 import { glyphs, theme } from "../../theme.ts";
 import { toSingleLine, truncateToWidth } from "../../utils/width.ts";
@@ -117,8 +120,10 @@ export function MoveMessageScreen({
           }
 
           return mode === "move"
-            ? `Moved ${formatCount(outcome.removed, "message")} out of ${queue.name}${outcome.restored > 0 ? `, ${formatCount(outcome.restored, "message")} put back` : ""}.`
-            : `Reprocessed ${formatCount(outcome.removed, "message")} from ${queue.name}.`;
+            ? `Moved ${formatCount(outcome.removed, "message")} out of ${queue.name}.` +
+                repositionedNote(outcome.removed, outcome.restored)
+            : `Reprocessed ${formatCount(outcome.removed, "message")} from ${queue.name}.` +
+                repositionedNote(outcome.removed, outcome.restored);
         }),
     });
 
@@ -170,8 +175,9 @@ export function MoveMessageScreen({
     <Box flexDirection="column">
       {preview}
       <StatusMessage tone="warning">
-        {queue.name} will be drained and restored so this one message can be
-        taken out. Every other message goes back.
+        Every other message in {queue.name} is taken off the queue and re-queued
+        to get at {messages.length === 1 ? "this one" : "these"}. Order is kept,
+        but each one comes back as a new delivery.
       </StatusMessage>
       <Confirm
         message={describe(mode, messages, queue, destination)}
