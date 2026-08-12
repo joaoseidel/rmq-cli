@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionInfo } from "../../../core/domain/connection.ts";
 import type { Message } from "../../../core/domain/message.ts";
 import { totalMessages, type Queue } from "../../../core/domain/queue.ts";
+import type { Preferences } from "../../../core/domain/preferences.ts";
 import {
   DEFAULT_SEARCH_LIMIT,
   SEARCH_DEPTHS,
@@ -45,6 +46,8 @@ interface SearchRun {
 
 export interface SearchScreenProps {
   readonly messages: MessageOperations;
+  readonly preferences: Preferences;
+  readonly savePreferences: (changes: Partial<Preferences>) => Preferences;
   readonly connection: ConnectionInfo;
   readonly queues: readonly Queue[];
   readonly scope: string;
@@ -57,6 +60,8 @@ export interface SearchScreenProps {
 
 export function SearchScreen({
   messages,
+  preferences,
+  savePreferences,
   connection,
   queues,
   scope,
@@ -72,7 +77,7 @@ export function SearchScreen({
 
   const [runToken, setRunToken] = useState(0);
 
-  const [limit, setLimit] = useState<number>(DEFAULT_SEARCH_LIMIT);
+  const [limit, setLimit] = useState<number>(preferences.searchDepth);
   const [run, setRun] = useState<SearchRun | null>(null);
 
   const targets = useMemo(
@@ -111,6 +116,7 @@ export function SearchScreen({
         queues: targets,
         term: query,
         limitPerQueue: limit,
+        concurrency: preferences.searchConcurrency,
         info: connection,
         isCancelled: () => cancelledRef.current,
         onProgress: (outcome) => {
@@ -153,12 +159,18 @@ export function SearchScreen({
     },
   });
 
+  const remember = (current: number, direction: "deeper" | "shallower") => {
+    const next = stepSearchDepth(current, direction);
+    if (next !== current) savePreferences({ searchDepth: next });
+    return next;
+  };
+
   useScreenKeys("search", onAction, {
     isActive: isActive && !typing,
     local: {
       "/": () => setTyping(true),
-      "+": () => setLimit((current) => stepSearchDepth(current, "deeper")),
-      "-": () => setLimit((current) => stepSearchDepth(current, "shallower")),
+      "+": () => setLimit((current) => remember(current, "deeper")),
+      "-": () => setLimit((current) => remember(current, "shallower")),
       r: () => {
         if (query !== "") setRunToken((token) => token + 1);
       },
@@ -274,6 +286,7 @@ function SearchBody({
         <>
           <SearchHitTable
             hits={hits.slice(start, end)}
+            allHits={hits}
             width={width}
             pattern={highlight}
             selectedIndex={selectedIndex - start}

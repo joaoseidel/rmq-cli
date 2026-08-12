@@ -2,9 +2,11 @@ import { CompositeBrokerClient } from "./adapters/rabbitmq/composite-client.ts";
 import { BackedUpOperationCoordinator } from "./adapters/storage/backed-up-operation-coordinator.ts";
 import { JsonConfigurationStore } from "./adapters/storage/json-configuration-store.ts";
 import { JsonMessageBackupRepository } from "./adapters/storage/json-message-backup-repository.ts";
+import { JsonPreferencesStore } from "./adapters/storage/json-preferences-store.ts";
 import { JsonSettingsStore } from "./adapters/storage/json-settings-store.ts";
 import { FileKeySecretCipher } from "./adapters/storage/secret-cipher.ts";
 import type { BrokerClient } from "./core/ports/broker.ts";
+import type { PreferencesStore } from "./core/ports/stores.ts";
 import { ConnectionOperations } from "./core/usecase/connection-operations.ts";
 import { JobManager } from "./core/usecase/jobs.ts";
 import { MessageOperations } from "./core/usecase/message-operations.ts";
@@ -18,6 +20,7 @@ export interface Container {
   readonly messages: MessageOperations;
   readonly vhosts: VHostOperations;
   readonly jobs: JobManager;
+  readonly preferences: PreferencesStore;
 }
 
 export function createContainer(): Container {
@@ -41,5 +44,6 @@ export function createContainer(): Container {
     messages: new MessageOperations(broker, coordinator, backups),
     vhosts: new VHostOperations(broker, configStore),
     jobs: new JobManager(),
+    preferences: new JsonPreferencesStore(settings),
   };
 }

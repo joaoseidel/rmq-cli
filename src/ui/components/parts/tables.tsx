@@ -44,12 +44,14 @@ function queueColumns(pattern: string): Column<Queue>[] {
 
 export function QueueTable({
   queues,
+  allQueues,
   width,
   pattern = "",
   selectedIndex,
   isMarked,
 }: {
   readonly queues: readonly Queue[];
+  readonly allQueues?: readonly Queue[];
   readonly width: number;
   readonly pattern?: string;
   readonly selectedIndex?: number;
@@ -59,6 +61,7 @@ export function QueueTable({
     <Table
       columns={queueColumns(pattern)}
       rows={queues}
+      widthRows={allQueues ?? queues}
       {...(isMarked === undefined ? {} : { isMarked })}
       maxWidth={width}
       selectedIndex={selectedIndex}
@@ -115,12 +118,14 @@ function messageColumns(pattern: string): Column<Message>[] {
 
 export function MessageTable({
   messages,
+  allMessages,
   width,
   pattern = "",
   selectedIndex,
   isMarked,
 }: {
   readonly messages: readonly Message[];
+  readonly allMessages?: readonly Message[];
   readonly width: number;
   readonly pattern?: string;
   readonly selectedIndex?: number;
@@ -130,6 +135,7 @@ export function MessageTable({
     <Table
       columns={messageColumns(pattern)}
       rows={messages}
+      widthRows={allMessages ?? messages}
       {...(isMarked === undefined ? {} : { isMarked })}
       maxWidth={width}
       selectedIndex={selectedIndex}
@@ -169,11 +175,13 @@ function searchHitColumns(pattern: string): Column<MessageSearchHit>[] {
 
 export function SearchHitTable({
   hits,
+  allHits,
   width,
   pattern = "",
   selectedIndex,
 }: {
   readonly hits: readonly MessageSearchHit[];
+  readonly allHits?: readonly MessageSearchHit[];
   readonly width: number;
   readonly pattern?: string;
   readonly selectedIndex?: number;
@@ -182,6 +190,7 @@ export function SearchHitTable({
     <Table
       columns={searchHitColumns(pattern)}
       rows={hits}
+      widthRows={allHits ?? hits}
       maxWidth={width}
       selectedIndex={selectedIndex}
       rowKey={(hit) => `${hit.queue}/${hit.message.id}`}
@@ -233,10 +242,12 @@ function connectionColumns(): Column<ConnectionInfo>[] {
 
 export function ConnectionTable({
   connections,
+  allConnections,
   width,
   selectedIndex,
 }: {
   readonly connections: readonly ConnectionInfo[];
+  readonly allConnections?: readonly ConnectionInfo[];
   readonly width: number;
   readonly selectedIndex?: number;
 }) {
@@ -244,6 +255,7 @@ export function ConnectionTable({
     <Table
       columns={connectionColumns()}
       rows={connections}
+      widthRows={allConnections ?? connections}
       maxWidth={width}
       selectedIndex={selectedIndex}
       rowKey={(connection) => connection.id}

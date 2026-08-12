@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { BackedUpOperationCoordinator } from "../src/adapters/storage/backed-up-operation-coordinator.ts";
 import { JsonConfigurationStore } from "../src/adapters/storage/json-configuration-store.ts";
 import { JsonMessageBackupRepository } from "../src/adapters/storage/json-message-backup-repository.ts";
+import { JsonPreferencesStore } from "../src/adapters/storage/json-preferences-store.ts";
 import { JsonSettingsStore } from "../src/adapters/storage/json-settings-store.ts";
 import { FileKeySecretCipher } from "../src/adapters/storage/secret-cipher.ts";
 import type { Container } from "../src/container.ts";
@@ -40,6 +41,7 @@ function build(seed: Record<string, string[]>): Container {
     messages: new MessageOperations(broker, coordinator, backups),
     vhosts: new VHostOperations(broker, configStore),
     jobs: new JobManager(),
+    preferences: new JsonPreferencesStore(settings),
   };
 }
 
