@@ -4,12 +4,14 @@ import type { Message } from "../../core/domain/message.ts";
 import type { Queue } from "../../core/domain/queue.ts";
 import type { VHost } from "../../core/domain/vhost.ts";
 import type { ActionId } from "../actions.ts";
+import type { Job } from "../../core/usecase/jobs.ts";
 import type { ListMemory } from "../hooks/use-list-memory.ts";
 import type { Screen, ScreenName } from "../screens.ts";
 import { ConnectionFormScreen } from "./screens/connection-form-screen.tsx";
 import { ConnectionsScreen } from "./screens/connections-screen.tsx";
 import { ConsumeScreen } from "./screens/consume-screen.tsx";
 import { HelpScreen } from "./screens/help-screen.tsx";
+import { JobsScreen } from "./screens/jobs-screen.tsx";
 import { MessageScreen } from "./screens/message-screen.tsx";
 import { MoveMessageScreen } from "./screens/move-message-screen.tsx";
 import { PublishScreen } from "./screens/publish-screen.tsx";
@@ -48,6 +50,7 @@ export interface ScreenContext {
     filter: string,
   ) => void;
   readonly listMemory: ListMemory;
+  readonly jobs: readonly Job[];
   readonly helpFrom: ScreenName;
   readonly filterRequested: boolean;
   readonly onFilterOpened: () => void;
@@ -133,6 +136,7 @@ export function ScreenRouter({
           mode={screen.mode}
           broker={ctx.container.broker}
           operations={ctx.container.messages}
+          jobs={ctx.container.jobs}
           connection={ctx.connection}
           queue={screen.queue}
           messages={screen.messages}
@@ -186,6 +190,7 @@ export function ScreenRouter({
         <TransferScreen
           broker={ctx.container.broker}
           queues={ctx.container.queues}
+          jobs={ctx.container.jobs}
           connection={ctx.connection}
           {...(screen.from === undefined
             ? {}
@@ -262,6 +267,19 @@ export function ScreenRouter({
           isActive={ctx.isActive}
           onCancel={ctx.back}
           onSelect={ctx.switchVHost}
+        />
+      );
+
+    case "jobs":
+      return (
+        <JobsScreen
+          jobs={ctx.jobs}
+          onCancel={(id) => ctx.container.jobs.cancel(id)}
+          onDismiss={(id) => ctx.container.jobs.dismiss(id)}
+          onClear={() => ctx.container.jobs.dismissFinished()}
+          width={ctx.width}
+          height={ctx.height}
+          isActive={ctx.isActive}
         />
       );
 

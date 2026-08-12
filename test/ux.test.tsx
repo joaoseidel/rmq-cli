@@ -12,6 +12,7 @@ import { FileKeySecretCipher } from "../src/adapters/storage/secret-cipher.ts";
 import type { Container } from "../src/container.ts";
 import { globMatches } from "../src/core/util/glob.ts";
 import { ConnectionOperations } from "../src/core/usecase/connection-operations.ts";
+import { JobManager } from "../src/core/usecase/jobs.ts";
 import { MessageOperations } from "../src/core/usecase/message-operations.ts";
 import { QueueOperations } from "../src/core/usecase/queue-operations.ts";
 import { VHostOperations } from "../src/core/usecase/vhost-operations.ts";
@@ -45,6 +46,7 @@ function build(seed: Record<string, string[]>): Container {
     queues: new QueueOperations(broker, coordinator),
     messages: new MessageOperations(broker, coordinator),
     vhosts: new VHostOperations(broker, configStore),
+    jobs: new JobManager(),
   };
 }
 
@@ -602,6 +604,158 @@ describe("the action list", () => {
       "m3",
       "m4",
     ]);
+    unmount();
+  });
+});
+
+describe("running operations in the background", () => {
+  it("keeps the app navigable while a job runs and shows its progress", async () => {
+    const container = build(seed);
+    const release = { resolve: () => {} };
+    const gate = new Promise<void>((resolve) => {
+      release.resolve = resolve;
+    });
+
+    container.jobs.start({
+      kind: "move",
+      title: "Moving 3 messages to retry",
+      run: async (job) => {
+        job.report({ phase: "Repositioning", done: 412, total: 1204 });
+        await gate;
+        return "Moved 3 messages.";
+      },
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App container={container} />);
+    await settle();
+
+    expect(lastFrame()).toContain("Moving 3 messages to retry");
+    expect(lastFrame()).toContain("repositioning 412/1,204");
+    expect(lastFrame()).toContain("1 running");
+
+    stdin.write("/");
+    await settle();
+    stdin.write("order");
+    await settle();
+    stdin.write("\r");
+    await settle();
+    expect(lastFrame()).toContain("order-processing");
+
+    release.resolve();
+    await settle();
+    expect(lastFrame()).toContain("Moved 3 messages.");
+
+    unmount();
+  });
+
+  it("asks before quitting while an operation is still running", async () => {
+    const container = build(seed);
+    const release = { resolve: () => {} };
+    const gate = new Promise<void>((resolve) => {
+      release.resolve = resolve;
+    });
+
+    container.jobs.start({
+      kind: "move",
+      title: "Moving 3 messages to retry",
+      run: async () => {
+        await gate;
+        return "done";
+      },
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App container={container} />);
+    await settle();
+
+    stdin.write("q");
+    await settle();
+
+    expect(lastFrame()).toContain("1 operation still running");
+    expect(lastFrame()).toContain("Quit anyway?");
+
+    stdin.write("n");
+    await settle();
+    expect(lastFrame()).not.toContain("Quit anyway?");
+
+    release.resolve();
+    await settle();
+    unmount();
+  });
+
+  it("quits without asking when nothing is running", async () => {
+    const container = build(seed);
+    const { lastFrame, stdin, unmount } = render(<App container={container} />);
+    await settle();
+
+    stdin.write("q");
+    await settle();
+
+    expect(lastFrame()).not.toContain("Quit anyway?");
+    unmount();
+  });
+
+  it("lists jobs and lets one be cancelled", async () => {
+    const container = build(seed);
+    const gate = new Promise<void>(() => {});
+
+    container.jobs.start({
+      kind: "move",
+      title: "Moving 3 messages to retry",
+      run: async (job) => {
+        await gate;
+        job.throwIfCancelled();
+        return "done";
+      },
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App container={container} />);
+    await settle();
+
+    stdin.write("J");
+    await settle();
+    expect(lastFrame()).toContain("Background jobs");
+    expect(lastFrame()).toContain("Moving 3 messages to retry");
+
+    stdin.write("x");
+    await settle();
+    expect(lastFrame()).toContain("stopping…");
+
+    unmount();
+  });
+
+  it("says so when there is nothing running", async () => {
+    const container = build(seed);
+    const { lastFrame, stdin, unmount } = render(<App container={container} />);
+    await settle();
+
+    stdin.write("J");
+    await settle();
+
+    expect(lastFrame()).toContain("Nothing is running.");
+    unmount();
+  });
+
+  it("hands a bulk delete to a job and reports it when it lands", async () => {
+    const container = build({ orders: ["a", "b", "c"] });
+    const broker = container.broker as FakeBroker;
+    const { lastFrame, stdin, unmount } = render(<App container={container} />);
+    await settle();
+
+    stdin.write("\r");
+    await settle();
+    stdin.write(" ");
+    await settle();
+    stdin.write("d");
+    await settle();
+
+    expect(lastFrame()).toContain("Delete this message");
+    stdin.write("y");
+    await settle();
+    await settle();
+
+    expect(broker.payloads("orders")).toEqual(["b", "c"]);
+    expect(lastFrame()).toContain("Deleted 1 message from orders");
+
     unmount();
   });
 });

@@ -244,6 +244,26 @@ export const SCREEN_KEYS = {
       primary: true,
     },
   ],
+  jobs: [
+    { key: "↑↓", label: "move", displayOnly: true },
+    {
+      key: "x",
+      label: "cancel",
+      description: "stop the selected operation",
+      primary: true,
+    },
+    {
+      key: "d",
+      label: "dismiss",
+      description: "forget a finished operation",
+      primary: true,
+    },
+    {
+      key: "c",
+      label: "clear",
+      description: "forget every finished operation",
+    },
+  ],
   message: [
     {
       key: "j/k",

@@ -1,12 +1,11 @@
 import { Box, Text } from "ink";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ConnectionInfo } from "../../../core/domain/connection.ts";
-import type { OperationSummary } from "../../../core/domain/operation.ts";
 import type { BrokerClient } from "../../../core/ports/broker.ts";
+import type { JobManager } from "../../../core/usecase/jobs.ts";
 import { ALL_MESSAGES } from "../../../core/usecase/message-operations.ts";
 import type { QueueOperations } from "../../../core/usecase/queue-operations.ts";
-import { errorMessage, formatCount } from "../../../core/util/text.ts";
-import { useAsyncAction } from "../../hooks/use-async-action.ts";
+import { formatCount } from "../../../core/util/text.ts";
 import { useQueueNames } from "../../hooks/use-queue-names.ts";
 import { theme } from "../../theme.ts";
 import { Confirm } from "../common/confirm.tsx";
@@ -16,13 +15,12 @@ import {
   positiveInteger,
   type FormField,
 } from "../common/form.tsx";
-import { OperationSummaryView } from "../parts/operation-summary-view.tsx";
-import { Spinner } from "../parts/spinner.tsx";
 import { StatusMessage } from "../parts/status-message.tsx";
 
 export interface TransferScreenProps {
   readonly broker: BrokerClient;
   readonly queues: QueueOperations;
+  readonly jobs: JobManager;
   readonly connection: ConnectionInfo;
   readonly fromQueue?: string;
   readonly onDone: (summary: string) => void;
@@ -80,6 +78,7 @@ function buildFields(
 export function TransferScreen({
   broker,
   queues,
+  jobs,
   connection,
   fromQueue,
   onDone,
@@ -89,46 +88,35 @@ export function TransferScreen({
   const [plan, setPlan] = useState<Plan | null>(null);
   const queueNames = useQueueNames(broker, connection);
 
-  const transfer = useAsyncAction(
-    async (target: Plan): Promise<OperationSummary> =>
-      broker.withConnection(connection, (open) =>
-        queues.safeRequeueMessages({
-          fromQueue: target.from,
-          toQueue: target.to,
-          limit: target.limit,
-          connection: open,
-        }),
-      ),
-  );
+  const start = (target: Plan) => {
+    const what =
+      target.limit === ALL_MESSAGES
+        ? "every message"
+        : formatCount(target.limit, "message");
+    const title = `Moving ${what} from ${target.from} to ${target.to}`;
 
-  const summary =
-    transfer.state.status === "success" ? transfer.state.data : null;
+    jobs.start({
+      kind: "transfer",
+      title,
+      run: async (job) => {
+        const summary = await broker.withConnection(connection, (open) =>
+          queues.safeRequeueMessages({
+            fromQueue: target.from,
+            toQueue: target.to,
+            limit: target.limit,
+            connection: open,
+            onProgress: job.report,
+          }),
+        );
 
-  useEffect(() => {
-    if (summary === null) return;
-    onDone(
-      summary.failed > 0
-        ? `Moved ${summary.successful}, failed ${summary.failed}. Operation ${summary.id}.`
-        : `Moved ${formatCount(summary.successful, "message")}.`,
-    );
-  }, [summary, onDone]);
+        return summary.failed > 0
+          ? `Moved ${summary.successful}, failed ${summary.failed}. Operation ${summary.id}.`
+          : `Moved ${formatCount(summary.successful, "message")} to ${target.to}.`;
+      },
+    });
 
-  if (transfer.state.status === "running")
-    return <Spinner label="Moving messages…" />;
-
-  if (transfer.state.status === "success") {
-    return (
-      <OperationSummaryView
-        summary={transfer.state.data}
-        successLabel={(count) =>
-          `Moved ${formatCount(count, "message")} to ${plan?.to ?? ""}.`
-        }
-        failureLabel={(count) =>
-          `Failed to move ${formatCount(count, "message")}.`
-        }
-      />
-    );
-  }
+    onDone(`${title}… press J to watch it.`);
+  };
 
   if (plan !== null) {
     return (
@@ -143,7 +131,7 @@ export function TransferScreen({
           message="Proceed?"
           isActive={isActive}
           onAnswer={(confirmed) => {
-            if (confirmed) transfer.run(plan);
+            if (confirmed) start(plan);
             else setPlan(null);
           }}
         />
@@ -157,14 +145,6 @@ export function TransferScreen({
         Messages are backed up before the move, so nothing is lost if it fails.
       </Text>
       <Box height={1} />
-
-      {transfer.state.status === "failure" ? (
-        <Box marginBottom={1}>
-          <StatusMessage tone="danger">
-            {errorMessage(transfer.state.error)}
-          </StatusMessage>
-        </Box>
-      ) : null}
 
       <Form
         fields={buildFields(fromQueue, queueNames)}
