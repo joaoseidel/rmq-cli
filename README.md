@@ -13,7 +13,9 @@ A full-screen terminal browser for RabbitMQ, built with [Ink](https://github.com
 
 - **Queue browser** - filter by glob, inspect depths, purge, and tail live
 - **Message inspection** - page through without consuming, pretty-printed JSON, filter by payload/headers/id
-- **Cross-queue search** - search across multiple queues at once, results stream in
+- **Cross-queue search** - literal text, nested JSON fragments, `field:value` paths, or `re:` regexes, searched across many queues at once with results streaming in
+- **Background operations** - moves, transfers, purges and deletes run in the background with a progress bar and time remaining while you keep browsing
+- **Crash recovery** - work interrupted mid-flight is replayed from a write-ahead backup instead of being lost
 - **Publishing** - send to a queue or exchange with routing key, body inline or from file
 - **Export / import** - dump a queue to JSON, import back into any queue
 - **Bulk actions** - mark rows with `space`, then act on all of them at once
@@ -67,7 +69,22 @@ Press `?` for context-sensitive help. The footer always shows available keys for
 
 **Queue or message:** `d` delete, `M` move, `R` reprocess to original exchange.
 
-**Search results:** `+` / `-` adjust depth, `r` re-run, `/` new search.
+**Search results:** `+` / `-` adjust depth (remembered between runs), `r` re-run, `/` new search.
+
+**Background jobs:** `J` opens the job list from anywhere; `x` cancels one, `d` dismisses a finished one, `c` clears them all. Quitting while work is running asks first.
+
+### Searching a payload
+
+The search box takes three kinds of term:
+
+| Term | Matches |
+| ---- | ------- |
+| `AB-991` | that text anywhere in the payload, id, routing key, exchange, headers or properties |
+| `{"status":"failed"}` | that JSON fragment wherever it is nested, ignoring whitespace |
+| `order.items.sku:AB-991` | a value at that path inside the payload; `*` and array indexes work too |
+| `re:AB-\d{3}` | an explicit regular expression |
+
+Terms are literal by default, so braces, brackets and pipes in a payload are safe to paste. A term that cannot be parsed is reported as an error rather than quietly matching nothing.
 
 ## Safety
 
@@ -76,6 +93,8 @@ Press `?` for context-sensitive help. The footer always shows available keys for
 - Single-message delete/move/reprocess drains and republishes the queue; the app warns before doing it.
 - All destructive operations run behind a write-ahead log at `~/.rmq-cli/message_backup_operations.json`.
 - Moves publish the copy before removing the original - interruption duplicates, never loses.
+- Moves and deletes carry headers, properties and routing through unchanged.
+- If rmq is interrupted mid-operation, the next run offers to put the drained messages back. Recovery only ever republishes into the broker and vhost the messages came from.
 - Publishes are confirmed by the broker; unroutable destinations are reported as failures.
 
 ### Connection types
@@ -92,6 +111,8 @@ Settings live in `~/.rmq-cli/settings.json` (mode `0600`). Set `RMQ_HOME` to rel
 Broker passwords are AES-256-GCM encrypted. The key is generated on first run at `~/.rmq-cli/key`. Back up `key` alongside `settings.json`.
 
 Logs go to `~/.rmq-cli/rmq-cli.log`. Set `RMQ_LOG_LEVEL` to `debug`, `info`, `warn`, or `error`.
+
+Preferences (message page size, search depth, and the concurrency used for search, publishing and per-queue fan-out) are stored alongside your connections and updated as you adjust them in the app.
 
 ## Development
 
