@@ -4,7 +4,7 @@ import {
   type OperationSummary,
   type ProgressReporter,
 } from "../domain/operation.ts";
-import { republishInput } from "./message-operations.ts";
+import { originOf, republishInput } from "./message-operations.ts";
 import type { Queue } from "../domain/queue.ts";
 import type {
   BrokerClient,
@@ -70,7 +70,7 @@ export class QueueOperations {
 
     return this.coordinator.executeOperation({
       operationType: "requeue-messages",
-      queueName: fromQueue,
+      origin: originOf(fromQueue, connection),
       provideMessages: () =>
         this.broker.getMessages({
           queueName: fromQueue,

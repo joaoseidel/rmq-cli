@@ -758,3 +758,51 @@ describe("running operations in the background", () => {
     unmount();
   });
 });
+
+describe("paging through a deep queue", () => {
+  const deep = Array.from({ length: 25 }, (_, index) => `m${index}`);
+
+  it("says how much of the queue it is showing and pages on demand", async () => {
+    const container = build({ orders: deep });
+    const { lastFrame, stdin, unmount } = render(
+      <App container={container} pageSize={10} />,
+    );
+    await settle();
+
+    stdin.write("\r");
+    await settle();
+
+    expect(lastFrame()).toContain("showing 10 of 25");
+    expect(lastFrame()).toContain("] for more");
+
+    stdin.write("]");
+    await settle();
+    expect(lastFrame()).toContain("showing 20 of 25");
+
+    stdin.write("]");
+    await settle();
+    expect(lastFrame()).toContain("all 25 messages");
+    expect(lastFrame()).not.toContain("] for more");
+
+    unmount();
+  });
+
+  it("leaves the queue untouched after browsing it", async () => {
+    const container = build({ orders: deep });
+    const broker = container.broker as FakeBroker;
+    const { stdin, unmount } = render(
+      <App container={container} pageSize={10} />,
+    );
+    await settle();
+
+    stdin.write("\r");
+    await settle();
+    stdin.write("]");
+    await settle();
+    stdin.write(ESC);
+    await settle();
+
+    expect(broker.payloads("orders")).toEqual(deep);
+    unmount();
+  });
+});

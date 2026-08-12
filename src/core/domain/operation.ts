@@ -16,13 +16,32 @@ export function failure(messageId: string, reason: string): ProcessingResult {
   return { status: "failure", messageId, reason };
 }
 
+export interface BackupOrigin {
+  readonly queueName: string;
+  readonly connectionId: string;
+  readonly vhost: string;
+}
+
 export interface InterruptedOperation {
   readonly id: string;
   readonly type: string;
-  readonly queueName: string;
+  readonly origin: BackupOrigin;
   readonly createdAt: number;
   readonly total: number;
   readonly remaining: number;
+  readonly recoverable: boolean;
+}
+
+export function sameOrigin(left: BackupOrigin, right: BackupOrigin): boolean {
+  return (
+    left.connectionId === right.connectionId &&
+    left.vhost === right.vhost &&
+    left.queueName === right.queueName
+  );
+}
+
+export function isRecoverable(origin: BackupOrigin): boolean {
+  return origin.queueName !== "" && origin.connectionId !== "";
 }
 
 export interface OperationProgress {

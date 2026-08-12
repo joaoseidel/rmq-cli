@@ -11,6 +11,7 @@ import { StatusMessage } from "../parts/status-message.tsx";
 
 export interface RecoveryScreenProps {
   readonly operations: MessageOperations;
+  readonly scope: { readonly connectionId: string; readonly vhost: string };
   readonly onRecover: (operation: InterruptedOperation) => void;
   readonly onForget: (operation: InterruptedOperation) => void;
   readonly height: number;
@@ -19,6 +20,7 @@ export interface RecoveryScreenProps {
 
 export function RecoveryScreen({
   operations,
+  scope,
   onRecover,
   onForget,
   height,
@@ -27,8 +29,8 @@ export function RecoveryScreen({
   const [version, reload] = useReducer((count: number) => count + 1, 0);
 
   const entries = useMemo(
-    () => operations.listInterruptedOperations(),
-    [operations, version],
+    () => operations.listInterruptedOperations(scope),
+    [operations, scope, version],
   );
 
   const navigation = useListNavigation({
@@ -37,7 +39,7 @@ export function RecoveryScreen({
     isActive,
     onSelect: (index) => {
       const entry = entries[index];
-      if (entry !== undefined) onRecover(entry);
+      if (entry !== undefined && entry.recoverable) onRecover(entry);
     },
   });
 
@@ -74,8 +76,8 @@ export function RecoveryScreen({
   return (
     <Box flexDirection="column">
       <StatusMessage tone="warning">
-        {formatCount(entries.length, "operation")} did not finish. Press Enter to
-        put the messages back.
+        {formatCount(entries.length, "operation")} on this broker did not
+        finish. Press Enter to put the messages back.
       </StatusMessage>
       <Box height={1} />
 
@@ -92,7 +94,8 @@ export function RecoveryScreen({
             </Text>
             <Text color={theme.muted}>
               {" "}
-              to put back into {entry.queueName === "" ? "?" : entry.queueName}{" "}
+              to put back into{" "}
+              {entry.recoverable ? entry.origin.queueName : "an unknown queue"}{" "}
               {glyphs.bullet} {entry.type} {glyphs.bullet}{" "}
               {formatDuration(now - entry.createdAt)} ago {glyphs.bullet}{" "}
               {entry.id.slice(0, 8)}

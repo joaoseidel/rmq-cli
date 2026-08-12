@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Message } from "../../core/domain/message.ts";
+import type { BackupOrigin } from "../../core/domain/operation.ts";
 import {
   emptySummary,
   type OperationSummary,
@@ -20,7 +21,7 @@ export class BackedUpOperationCoordinator implements SafeOperationCoordinator {
   async executeOperation(input: {
     operationId?: string;
     operationType: string;
-    queueName: string;
+    origin: BackupOrigin;
     provideMessages: () => Promise<readonly Message[]>;
     process: (message: Message) => Promise<ProcessingResult>;
     onProgress?: (progress: { processed: number; total: number }) => void;
@@ -35,7 +36,7 @@ export class BackedUpOperationCoordinator implements SafeOperationCoordinator {
       !this.backups.storeMessages(
         operationId,
         input.operationType,
-        input.queueName,
+        input.origin,
         messages,
       )
     ) {
