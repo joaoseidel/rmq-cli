@@ -146,3 +146,101 @@ describe("paging when a read fails part way", () => {
     await failing.close();
   });
 });
+
+describe("browsing while something else works on the queue", () => {
+  it("does not hide messages from an operation on another connection", async () => {
+    const { broker, messages } = build({ orders: deep }, true);
+
+    const session = await messages.openPeekSession({
+      queueName: "orders",
+      info: testConnection,
+    });
+    const page = await session.next(10);
+    const target = page.messages[3]!;
+
+    const outcome = await broker.withConnection(testConnection, (open) =>
+      messages.safeDeleteMessage({
+        id: target.id,
+        queueName: "orders",
+        connection: open,
+      }),
+    );
+
+    await session.close();
+
+    expect(outcome.removed).toBe(1);
+    expect(broker.payloads("orders")).toEqual(
+      deep.filter((payload) => payload !== target.payload),
+    );
+  });
+
+  it("does not leave a moved message behind in the source queue", async () => {
+    const { broker, messages } = build({ orders: deep, retry: [] }, true);
+
+    const session = await messages.openPeekSession({
+      queueName: "orders",
+      info: testConnection,
+    });
+    const page = await session.next(10);
+    const moving = page.messages.slice(0, 5);
+
+    await broker.withConnection(testConnection, (open) =>
+      messages.safeMoveMessages({
+        messages: moving,
+        fromQueue: "orders",
+        toQueue: "retry",
+        connection: open,
+      }),
+    );
+
+    await session.close();
+
+    expect(broker.payloads("retry")).toEqual(
+      moving.map((entry) => entry.payload),
+    );
+    expect(broker.payloads("orders")).toHaveLength(deep.length - 5);
+    for (const entry of moving) {
+      expect(broker.payloads("orders")).not.toContain(entry.payload);
+    }
+  });
+
+  it("holds nothing unacknowledged once a page has been handed over", async () => {
+    const { broker, messages } = build({ orders: deep }, true);
+    const session = await messages.openPeekSession({
+      queueName: "orders",
+      info: testConnection,
+    });
+
+    await session.next(10);
+
+    const seenByAnother = await broker.withConnection(testConnection, (open) =>
+      messages.getMessages("orders", 100, false, open),
+    );
+
+    expect(seenByAnother).toHaveLength(deep.length);
+    await session.close();
+  });
+});
+
+describe("refusing to duplicate messages", () => {
+  it("reports loudly when copies land but the originals cannot be removed", async () => {
+    const { broker, messages } = build({ orders: ["a", "b", "c"], retry: [] }, false);
+
+    const all = await broker.withConnection(testConnection, (open) =>
+      messages.getMessages("orders", 10, false, open),
+    );
+
+    await broker.purgeQueue("orders");
+
+    await expect(
+      broker.withConnection(testConnection, (open) =>
+        messages.safeMoveMessages({
+          messages: [all[0]!],
+          fromQueue: "orders",
+          toQueue: "retry",
+          connection: open,
+        }),
+      ),
+    ).rejects.toThrow(/duplicated/);
+  });
+});

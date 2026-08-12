@@ -11,6 +11,7 @@ export interface ScreenFrameProps {
   readonly badge?: ReactNode;
   readonly hints: readonly KeyHint[];
   readonly status?: ReactNode;
+  readonly footerNote?: ReactNode;
   readonly width: number;
   readonly height: number;
   readonly children: ReactNode;
@@ -22,6 +23,7 @@ export function ScreenFrame({
   badge,
   hints,
   status,
+  footerNote,
   width,
   height,
   children,
@@ -54,6 +56,8 @@ export function ScreenFrame({
       </Box>
 
       <Text color={theme.border}>{rule}</Text>
+
+      {footerNote}
 
       <KeyHints hints={hints} maxWidth={width} />
     </Box>
