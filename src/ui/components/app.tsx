@@ -7,7 +7,11 @@ import type { Queue } from "../../core/domain/queue.ts";
 import { totalMessages } from "../../core/domain/queue.ts";
 import { isActive as isJobActive, type Job } from "../../core/usecase/jobs.ts";
 import { mapWithConcurrency } from "../../core/util/pool.ts";
-import { errorMessage, formatCount } from "../../core/util/text.ts";
+import {
+  errorMessage,
+  formatCount,
+  repositionedNote,
+} from "../../core/util/text.ts";
 import { paletteActions, rowActions, type ActionId } from "../actions.ts";
 import { useJobCompletions, useJobs } from "../hooks/use-jobs.ts";
 import {
@@ -182,9 +186,15 @@ function confirmationFor(pending: PendingAction): string {
     return `Purge ${formatCount(pending.queues.length, "queue")} (${names}${rest}), ${formatCount(total, "message")}? This cannot be undone.`;
   }
 
-  return pending.messages.length === 1
-    ? `Delete this message from '${pending.queue.name}'?`
-    : `Delete ${formatCount(pending.messages.length, "message")} from '${pending.queue.name}'? The rest of the queue is put back.`;
+  const what =
+    pending.messages.length === 1
+      ? "this message"
+      : formatCount(pending.messages.length, "message");
+
+  return (
+    `Delete ${what} from '${pending.queue.name}'? ` +
+    "Every other message is taken off the queue and re-queued to get at it."
+  );
 }
 
 function AppContent({ container, pageSize }: AppProps) {
@@ -422,10 +432,8 @@ function AppContent({ container, pageSize }: AppProps) {
               }
 
               return (
-                `Deleted ${formatCount(outcome.removed, "message")} from ${action.queue.name}` +
-                (outcome.restored > 0
-                  ? `, ${formatCount(outcome.restored, "message")} put back.`
-                  : ".")
+                `Deleted ${formatCount(outcome.removed, "message")} from ${action.queue.name}.` +
+                repositionedNote(outcome.removed, outcome.restored)
               );
             }),
         });

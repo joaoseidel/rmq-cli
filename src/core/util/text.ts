@@ -15,6 +15,15 @@ export function formatCount(count: number, singular: string): string {
   return `${count} ${pluralize(count, singular)}`;
 }
 
+export function repositionedNote(removed: number, restored: number): string {
+  if (restored <= 0) return "";
+
+  const others =
+    restored === 1 ? "1 other message was" : `${restored} other messages were`;
+
+  return ` ${others} re-queued to get at ${removed === 1 ? "it" : "them"}.`;
+}
+
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
