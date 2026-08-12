@@ -1,3 +1,21 @@
+# [2.2.0](https://github.com/joaoseidel/rmq-cli/compare/v2.1.0...v2.2.0) (2026-08-12)
+
+
+### Bug Fixes
+
+* accurate cross-queue search and lossless message handling ([2a0ee1d](https://github.com/joaoseidel/rmq-cli/commit/2a0ee1d049cb9e71f078b52fe08f86a4ff39c122))
+* keep long text inside the pane instead of breaking the layout ([b9c9607](https://github.com/joaoseidel/rmq-cli/commit/b9c9607fc0cd61a40c3b6e176386f331760f724b))
+* keep recovery inside the broker the messages came from ([d061a24](https://github.com/joaoseidel/rmq-cli/commit/d061a241051d8b50c6af9bce80dd58da2bd616d5))
+* say why other messages moved instead of just that they did ([94f800d](https://github.com/joaoseidel/rmq-cli/commit/94f800d04f0b3b0255f1d501a09ce6ef5bc7db7d))
+* stop the queue browser hiding messages from moves and deletes ([123c754](https://github.com/joaoseidel/rmq-cli/commit/123c754d146291c9e2889ce3f8a29a2060f6ab53))
+
+
+### Features
+
+* page through deep queues and remember how deep to look ([132f9ab](https://github.com/joaoseidel/rmq-cli/commit/132f9abe8a3f49ab929b1d72b447735a9b7cb525))
+* recover from a crash without losing messages or the terminal ([a89ff89](https://github.com/joaoseidel/rmq-cli/commit/a89ff89f7fafa65fdf0e5a93fb6080513af28cf4))
+* run broker operations in the background with progress and a quit guard ([31a4e18](https://github.com/joaoseidel/rmq-cli/commit/31a4e186c0c53af882aad419e74e49a27e6294a3))
+
 # [2.1.0](https://github.com/joaoseidel/rmq-cli/compare/v2.0.0...v2.1.0) (2026-08-11)
 
 
