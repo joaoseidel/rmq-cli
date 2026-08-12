@@ -26,6 +26,10 @@ class HttpBrokerConnection implements BrokerConnection {
 
   constructor(readonly info: ConnectionInfo) {}
 
+  async ackAll(): Promise<void> {}
+
+  async requeueAll(): Promise<void> {}
+
   async close(): Promise<void> {}
 }
 
@@ -47,6 +51,8 @@ export class HttpBrokerClient extends BaseBrokerClient {
       exchange,
       input.routingKey,
       input.payload,
+      input.headers,
+      input.properties,
     );
   }
 

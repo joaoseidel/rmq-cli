@@ -6,10 +6,12 @@ import {
 import type { Message } from "../src/core/domain/message.ts";
 import type { Queue } from "../src/core/domain/queue.ts";
 import type { VHost } from "../src/core/domain/vhost.ts";
-import type {
-  BrokerClient,
-  BrokerConnection,
-  PurgeResult,
+import {
+  PartialReadError,
+  type BrokerClient,
+  type BrokerConnection,
+  type PublishInput,
+  type PurgeResult,
 } from "../src/core/ports/broker.ts";
 import { ConnectionInfoSchema } from "../src/core/domain/connection.ts";
 import { vHost } from "../src/core/domain/vhost.ts";
@@ -25,28 +27,61 @@ export const testConnection: ConnectionInfo = ConnectionInfoSchema.parse({
   isDefault: true,
 });
 
+export interface StoredMessage {
+  readonly payload: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly properties: Readonly<Record<string, string>>;
+  readonly exchange: string;
+  readonly routingKey: string;
+}
+
+export interface PublishRecord {
+  readonly exchange: string | undefined;
+  readonly routingKey: string;
+  readonly payload: string;
+  readonly headers: Readonly<Record<string, string>> | undefined;
+  readonly properties: Readonly<Record<string, string>> | undefined;
+}
+
+function stored(payload: string, queueName: string): StoredMessage {
+  return {
+    payload,
+    headers: {},
+    properties: {},
+    exchange: "",
+    routingKey: queueName,
+  };
+}
+
 export class FakeBroker implements BrokerClient {
-  readonly queues = new Map<string, string[]>();
+  readonly queues = new Map<string, StoredMessage[]>();
   readonly rejectPublishTo = new Set<string>();
   readonly rejectReadsFrom = new Set<string>();
+  readonly failReadsAfter = new Map<string, number>();
+  readonly published: PublishRecord[] = [];
+  connectionsOpened = 0;
 
   constructor(seed: Record<string, string[]> = {}) {
-    for (const [name, payloads] of Object.entries(seed))
-      this.queues.set(name, [...payloads]);
+    for (const [name, payloads] of Object.entries(seed)) {
+      this.queues.set(
+        name,
+        payloads.map((payload) => stored(payload, name)),
+      );
+    }
   }
 
-  private contents(name: string): string[] {
+  private contents(name: string): StoredMessage[] {
     const existing = this.queues.get(name);
     if (existing !== undefined) return existing;
 
-    const created: string[] = [];
+    const created: StoredMessage[] = [];
     this.queues.set(name, created);
     return created;
   }
 
   private toMessage(
     queueName: string,
-    payload: string,
+    entry: StoredMessage,
     index: number,
   ): Message {
     return {
@@ -54,40 +89,67 @@ export class FakeBroker implements BrokerClient {
       id: createMessageId({
         deliveryTagOrCount: index + 1,
         queue: queueName,
-        exchange: "",
-        routingKey: queueName,
-        payload: Buffer.from(payload),
+        exchange: entry.exchange,
+        routingKey: entry.routingKey,
+        payload: Buffer.from(entry.payload),
       }),
-      exchange: "",
-      routingKey: queueName,
-      payload,
-      headers: {},
-      properties: {},
+      exchange: entry.exchange,
+      routingKey: entry.routingKey,
+      payload: entry.payload,
+      headers: { ...entry.headers },
+      properties: { ...entry.properties },
     };
   }
 
   payloads(queueName: string): string[] {
+    return this.contents(queueName).map((entry) => entry.payload);
+  }
+
+  stored(queueName: string): StoredMessage[] {
     return [...this.contents(queueName)];
   }
 
+  seedMessage(queueName: string, entry: StoredMessage): void {
+    this.contents(queueName).push(entry);
+  }
+
   async connect(info: ConnectionInfo): Promise<BrokerConnection> {
-    return { info, channel: null, close: async () => {} };
+    this.connectionsOpened += 1;
+    return {
+      info,
+      channel: null,
+      ackAll: async () => {},
+      requeueAll: async () => {},
+      close: async () => {},
+    };
   }
 
   async testConnection(): Promise<boolean> {
     return true;
   }
 
-  async publishMessage(input: {
-    routingKey: string;
-    payload: string;
-  }): Promise<boolean> {
+  async publishMessage(input: PublishInput): Promise<boolean> {
+    this.published.push({
+      exchange: input.exchange,
+      routingKey: input.routingKey,
+      payload: input.payload,
+      headers: input.headers,
+      properties: input.properties,
+    });
+
     if (this.rejectPublishTo.has(input.routingKey)) return false;
 
     const queue = this.queues.get(input.routingKey);
     if (queue === undefined) return false;
 
-    queue.push(input.payload);
+    queue.push({
+      payload: input.payload,
+      headers: { ...input.headers },
+      properties: { ...input.properties },
+      exchange: input.exchange ?? "",
+      routingKey: input.routingKey,
+    });
+
     return true;
   }
 
@@ -101,13 +163,25 @@ export class FakeBroker implements BrokerClient {
     }
 
     const queue = this.contents(input.queueName);
-    const taken = queue.slice(0, Math.min(input.count, queue.length));
+    const cap = this.failReadsAfter.get(input.queueName);
+    const wanted = Math.min(input.count, queue.length);
+    const taken = queue.slice(0, cap === undefined ? wanted : Math.min(cap, wanted));
+
+    const read = taken.map((entry, index) =>
+      this.toMessage(input.queueName, entry, index),
+    );
+
+    if (cap !== undefined && wanted > cap) {
+      throw new PartialReadError(
+        input.queueName,
+        read,
+        new Error("connection reset"),
+      );
+    }
 
     if (input.ack === true) queue.splice(0, taken.length);
 
-    return taken.map((payload, index) =>
-      this.toMessage(input.queueName, payload, index),
-    );
+    return read;
   }
 
   async purgeQueue(queueName: string): Promise<PurgeResult> {
@@ -123,10 +197,10 @@ export class FakeBroker implements BrokerClient {
         ([name]) =>
           pattern === null || name.includes(pattern.replaceAll("*", "")),
       )
-      .map(([name, payloads]) => ({
+      .map(([name, entries]) => ({
         name,
         vhost: "/",
-        messagesReady: payloads.length,
+        messagesReady: entries.length,
         messagesUnacknowledged: 0,
       }));
   }

@@ -12,14 +12,17 @@ import {
 import {
   DEFAULT_EXCHANGE,
   messageFromAmqp,
+  PUBLISH_TOKEN_HEADER,
+  toAmqpProperties,
   type Message,
 } from "../../core/domain/message.ts";
-import type {
-  BrokerConnection,
-  ConsumeInput,
-  GetMessagesInput,
-  PublishInput,
-  PurgeResult,
+import {
+  PartialReadError,
+  type BrokerConnection,
+  type ConsumeInput,
+  type GetMessagesInput,
+  type PublishInput,
+  type PurgeResult,
 } from "../../core/ports/broker.ts";
 import { createLogger } from "../../core/util/logger.ts";
 import { BaseBrokerClient } from "./base-client.ts";
@@ -29,8 +32,6 @@ const logger = createLogger("amqp-client");
 const MAX_PREFETCH = 65_535;
 
 const CONNECT_TIMEOUT_MS = 10_000;
-
-const PUBLISH_TOKEN_HEADER = "x-rmq-publish-token";
 
 class AmqpBrokerConnection implements BrokerConnection {
   private readonly returned = new Set<string>();
@@ -50,6 +51,8 @@ class AmqpBrokerConnection implements BrokerConnection {
     exchange: string,
     routingKey: string,
     payload: Buffer,
+    headers: Readonly<Record<string, string>> | undefined,
+    properties: Readonly<Record<string, string>> | undefined,
   ): Promise<boolean> {
     const token = randomUUID();
 
@@ -60,8 +63,9 @@ class AmqpBrokerConnection implements BrokerConnection {
         payload,
         {
           persistent: true,
+          ...toAmqpProperties(properties),
           mandatory: true,
-          headers: { [PUBLISH_TOKEN_HEADER]: token },
+          headers: { ...headers, [PUBLISH_TOKEN_HEADER]: token },
         },
         (error) => resolve(error === null || error === undefined),
       );
@@ -69,6 +73,22 @@ class AmqpBrokerConnection implements BrokerConnection {
 
     const wasReturned = this.returned.delete(token);
     return confirmed && !wasReturned;
+  }
+
+  async ackAll(): Promise<void> {
+    try {
+      this.channel.ackAll();
+    } catch (error) {
+      logger.debug("Nothing to acknowledge", error);
+    }
+  }
+
+  async requeueAll(): Promise<void> {
+    try {
+      this.channel.nackAll(true);
+    } catch (error) {
+      logger.debug("Nothing to requeue", error);
+    }
   }
 
   async close(): Promise<void> {
@@ -134,6 +154,8 @@ export class AmqpBrokerClient extends BaseBrokerClient {
         toWireExchange(input.exchange),
         input.routingKey,
         Buffer.from(input.payload, "utf8"),
+        input.headers,
+        input.properties,
       );
     } catch (error) {
       logger.error("Failed to publish message", error);
@@ -160,6 +182,7 @@ export class AmqpBrokerClient extends BaseBrokerClient {
         `Failed to get messages from queue '${input.queueName}'`,
         error,
       );
+      throw new PartialReadError(input.queueName, messages, error);
     }
 
     return messages;

@@ -147,8 +147,12 @@ export function TransferFileScreen({
     const published = await broker.withConnection(connection, async (open) => {
       let successful = 0;
       for (const message of incoming) {
-        if (await messages.publishToQueue(queue.name, message.payload, open))
-          successful += 1;
+        const sent = await messages.publishMessage(
+          message,
+          { routingKey: queue.name },
+          open,
+        );
+        if (sent) successful += 1;
       }
       return successful;
     });

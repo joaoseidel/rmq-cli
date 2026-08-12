@@ -8,7 +8,24 @@ import type { VHost } from "../domain/vhost.ts";
 export interface BrokerConnection {
   readonly info: ConnectionInfo;
   readonly channel: Channel | null;
+  ackAll(): Promise<void>;
+  requeueAll(): Promise<void>;
   close(): Promise<void>;
+}
+
+export class PartialReadError extends Error {
+  constructor(
+    readonly queueName: string,
+    readonly messages: readonly Message[],
+    readonly source: unknown,
+  ) {
+    super(
+      `read failed after ${messages.length} messages: ${
+        source instanceof Error ? source.message : String(source)
+      }`,
+    );
+    this.name = "PartialReadError";
+  }
 }
 
 export interface PurgeResult {
@@ -23,6 +40,8 @@ export interface PublishInput {
   readonly exchange?: string | undefined;
   readonly routingKey: string;
   readonly payload: string;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
+  readonly properties?: Readonly<Record<string, string>> | undefined;
   readonly connection: BrokerConnection;
 }
 

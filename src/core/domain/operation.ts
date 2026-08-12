@@ -16,6 +16,14 @@ export function failure(messageId: string, reason: string): ProcessingResult {
   return { status: "failure", messageId, reason };
 }
 
+export interface OperationProgress {
+  readonly phase: string;
+  readonly done: number;
+  readonly total: number;
+}
+
+export type ProgressReporter = (progress: OperationProgress) => void;
+
 export interface OperationSummary {
   readonly id: string;
   readonly successful: number;

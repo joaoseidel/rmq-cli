@@ -38,14 +38,41 @@ const AMQP_PROPERTY_KEYS = [
   "clusterId",
 ] as const satisfies readonly (keyof MessageProperties)[];
 
+export const PUBLISH_TOKEN_HEADER = "x-rmq-publish-token";
+
+const NUMERIC_PROPERTY_KEYS = new Set(["deliveryMode", "priority", "timestamp"]);
+
 function stringifyRecord(
   source: Record<string, unknown> | undefined,
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(source ?? {})) {
     if (value === undefined || value === null) continue;
+    if (key === PUBLISH_TOKEN_HEADER) continue;
     result[key] = typeof value === "string" ? value : JSON.stringify(value);
   }
+  return result;
+}
+
+export function toAmqpProperties(
+  properties: Readonly<Record<string, string>> | undefined,
+): Record<string, string | number> {
+  const result: Record<string, string | number> = {};
+  if (properties === undefined) return result;
+
+  for (const key of AMQP_PROPERTY_KEYS) {
+    const value = properties[key];
+    if (value === undefined) continue;
+
+    if (NUMERIC_PROPERTY_KEYS.has(key)) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) result[key] = numeric;
+      continue;
+    }
+
+    result[key] = value;
+  }
+
   return result;
 }
 

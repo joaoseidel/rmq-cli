@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import type { Message } from "../../../core/domain/message.ts";
-import { searchableText } from "../../../core/usecase/message-operations.ts";
+import { searchableText } from "../../../core/usecase/message-query.ts";
 import type { Queue } from "../../../core/domain/queue.ts";
 import { errorMessage, formatCount } from "../../../core/util/text.ts";
 import type { ActionId } from "../../actions.ts";
