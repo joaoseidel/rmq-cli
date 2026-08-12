@@ -1,4 +1,4 @@
-import { Text } from "ink";
+import { Box, Text } from "ink";
 import { memo } from "react";
 import type { Job } from "../../../core/usecase/jobs.ts";
 import { formatDuration, progressBar } from "../../../core/util/progress.ts";
@@ -28,27 +28,55 @@ function ProgressBarComponent({ done, total, width }: ProgressBarProps) {
 
 export const ProgressBar = memo(ProgressBarComponent);
 
-export interface JobIndicatorProps {
-  readonly jobs: readonly Job[];
+export const JOBS_PANEL_MAX_ROWS = 2;
+
+export function jobsPanelLines(running: number): number {
+  if (running === 0) return 0;
+  return Math.min(running, JOBS_PANEL_MAX_ROWS) + (running > JOBS_PANEL_MAX_ROWS ? 1 : 0);
 }
 
-function JobIndicatorComponent({ jobs }: JobIndicatorProps) {
-  const first = jobs[0];
-  if (first === undefined) return null;
+export interface JobsPanelProps {
+  readonly jobs: readonly Job[];
+  readonly width: number;
+}
 
-  const others = jobs.length - 1;
+function JobsPanelComponent({ jobs, width }: JobsPanelProps) {
+  if (jobs.length === 0) return null;
+
+  const shown = jobs.slice(0, JOBS_PANEL_MAX_ROWS);
+  const hidden = jobs.length - shown.length;
+  const barWidth = Math.max(6, Math.min(16, width - 56));
 
   return (
-    <Text>
-      <Spinner />
-      <Text color={theme.info}> {first.title}</Text>
-      <Text color={theme.muted}>
-        {" "}
-        {glyphs.bullet} {describeProgress(first)}
-        {others > 0 ? ` (+${others})` : ""}
-      </Text>
-    </Text>
+    <Box flexDirection="column" width={width}>
+      {shown.map((job) => (
+        <Text key={job.id} wrap="truncate-end">
+          <Spinner />
+          <Text color={theme.info}> {job.title}</Text>
+          {job.progress === null ? null : (
+            <>
+              <Text> </Text>
+              <ProgressBar
+                done={job.progress.done}
+                total={job.progress.total}
+                width={barWidth}
+              />
+            </>
+          )}
+          <Text color={theme.muted}>
+            {" "}
+            {glyphs.bullet} {describeProgress(job)}
+          </Text>
+        </Text>
+      ))}
+
+      {hidden === 0 ? null : (
+        <Text color={theme.muted} wrap="truncate-end">
+          {`  ${hidden} more ${hidden === 1 ? "job" : "jobs"} running. J to see them.`}
+        </Text>
+      )}
+    </Box>
   );
 }
 
-export const JobIndicator = memo(JobIndicatorComponent);
+export const JobsPanel = memo(JobsPanelComponent);

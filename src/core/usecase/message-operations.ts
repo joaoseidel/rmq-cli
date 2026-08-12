@@ -127,6 +127,23 @@ export interface PeekSession {
   close(): Promise<void>;
 }
 
+function assertOriginalsRemoved(
+  outcome: RemovalOutcome,
+  expected: number,
+  fromQueue: string,
+  destination: string,
+): void {
+  if (outcome.removed >= expected) return;
+
+  const stranded = expected - outcome.removed;
+  throw new Error(
+    `Copied ${expected} to ${destination}, but only removed ${outcome.removed} from '${fromQueue}'. ` +
+      `${stranded} of them are now duplicated: the copy was delivered and the original is still queued. ` +
+      "This happens when something else is holding those messages unacknowledged; " +
+      `retry once nothing else is reading '${fromQueue}', then delete the duplicates.`,
+  );
+}
+
 export interface RecoveryOutcome {
   readonly restored: number;
   readonly failed: number;
@@ -271,7 +288,6 @@ export class MessageOperations {
   }): Promise<PeekSession> {
     const { queueName, info } = input;
     const connection = await this.broker.connect(info);
-    const cursored = connection.channel !== null;
 
     let read = 0;
     let exhausted = false;
@@ -280,13 +296,12 @@ export class MessageOperations {
       next: async (count: number): Promise<PeekPage> => {
         if (exhausted) return { messages: [], exhausted: true };
 
-        const wanted = cursored ? count : read + count;
         let fetched: readonly Message[];
 
         try {
           fetched = await this.broker.getMessages({
             queueName,
-            count: wanted,
+            count: read + count,
             ack: false,
             connection,
           });
@@ -294,13 +309,14 @@ export class MessageOperations {
           if (!(error instanceof PartialReadError)) throw error;
           fetched = error.messages;
           exhausted = true;
+        } finally {
+          await connection.requeueAll();
         }
 
-        const page = cursored ? fetched : fetched.slice(read);
+        const page = fetched.slice(read);
         read += page.length;
 
         if (page.length < count) exhausted = true;
-        if (!cursored) await connection.requeueAll();
 
         return { messages: page, exhausted };
       },
@@ -599,12 +615,15 @@ export class MessageOperations {
       },
     );
 
-    return this.removeFromQueue({
+    const outcome = await this.removeFromQueue({
       queueName: fromQueue,
       targets: messages.map((message) => message.id),
       connection,
       ...(onProgress === undefined ? {} : { onProgress }),
     });
+
+    assertOriginalsRemoved(outcome, messages.length, fromQueue, `'${toQueue}'`);
+    return outcome;
   }
 
   async safeReprocessMessages(input: {
@@ -632,12 +651,20 @@ export class MessageOperations {
       },
     );
 
-    return this.removeFromQueue({
+    const outcome = await this.removeFromQueue({
       queueName: fromQueue,
       targets: messages.map((message) => message.id),
       connection,
       ...(onProgress === undefined ? {} : { onProgress }),
     });
+
+    assertOriginalsRemoved(
+      outcome,
+      messages.length,
+      fromQueue,
+      "their original exchanges",
+    );
+    return outcome;
   }
 
   safeRequeueMessage(input: {

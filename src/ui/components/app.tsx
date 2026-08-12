@@ -29,7 +29,7 @@ import { glyphs, theme } from "../theme.ts";
 import { Confirm } from "./common/confirm.tsx";
 import { ErrorBoundary } from "./error-boundary.tsx";
 import { CommandPalette } from "./parts/command-palette.tsx";
-import { JobIndicator } from "./parts/job-progress.tsx";
+import { JobsPanel, jobsPanelLines } from "./parts/job-progress.tsx";
 import { RowMenu } from "./parts/row-menu.tsx";
 import type { KeyHint } from "./parts/key-hints.tsx";
 import { SCREEN_CHROME_LINES, ScreenFrame } from "./parts/screen-frame.tsx";
@@ -644,7 +644,8 @@ function AppContent({ container, pageSize }: AppProps) {
 
   const interactive = pending === null && overlay === null;
 
-  const contentHeight = Math.max(3, rows - SCREEN_CHROME_LINES - 1);
+  const jobLines = jobsPanelLines(runningJobs.length);
+  const contentHeight = Math.max(3, rows - SCREEN_CHROME_LINES - 1 - jobLines);
   const status =
     notice === null ? (
       <Text> </Text>
@@ -778,12 +779,13 @@ function AppContent({ container, pageSize }: AppProps) {
       title={`rmq ${glyphs.bullet} ${screenTitle(screen)}`}
       subtitle={subtitle}
       badge={
-        runningJobs.length > 0 ? (
-          <JobIndicator jobs={runningJobs} />
-        ) : (
-          <Text color={theme.muted}>
-            {stack.depth > 1 ? `${stack.depth - 1} deep` : ""}
-          </Text>
+        <Text color={theme.muted}>
+          {stack.depth > 1 ? `${stack.depth - 1} deep` : ""}
+        </Text>
+      }
+      footerNote={
+        runningJobs.length === 0 ? undefined : (
+          <JobsPanel jobs={runningJobs} width={columns} />
         )
       }
       hints={

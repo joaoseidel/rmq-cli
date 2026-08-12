@@ -808,3 +808,91 @@ describe("paging through a deep queue", () => {
     unmount();
   });
 });
+
+describe("the running-jobs panel", () => {
+  function hold(container: Container, title: string) {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    container.jobs.start({
+      kind: "move",
+      title,
+      run: async (job) => {
+        job.report({ phase: "Repositioning", done: 5, total: 20 });
+        await gate;
+        return "done";
+      },
+    });
+    return release;
+  }
+
+  it("shows both jobs above the action bar when two are running", async () => {
+    const container = build(seed);
+    const releases = [hold(container, "Moving 5 to alpha"), hold(container, "Purging beta")];
+
+    const { lastFrame, unmount } = render(<App container={container} />);
+    await settle();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Moving 5 to alpha");
+    expect(frame).toContain("Purging beta");
+    expect(frame).not.toContain("more jobs running");
+
+    const lines = frame.split("\n");
+    const jobLine = lines.findIndex((line) => line.includes("Moving 5 to alpha"));
+    const hintLine = lines.findIndex((line) => line.includes("actions"));
+    expect(jobLine).toBeGreaterThan(-1);
+    expect(jobLine).toBeLessThan(hintLine);
+
+    for (const release of releases) release();
+    await settle();
+    unmount();
+  });
+
+  it("summarises the rest when more than two are running", async () => {
+    const container = build(seed);
+    const releases = [
+      hold(container, "Job alpha"),
+      hold(container, "Job beta"),
+      hold(container, "Job gamma"),
+      hold(container, "Job delta"),
+    ];
+
+    const { lastFrame, unmount } = render(<App container={container} />);
+    await settle();
+
+    expect(lastFrame()).toContain("2 more jobs running. J to see them.");
+
+    for (const release of releases) release();
+    await settle();
+    unmount();
+  });
+
+  it("uses the singular for a single hidden job", async () => {
+    const container = build(seed);
+    const releases = [
+      hold(container, "Job alpha"),
+      hold(container, "Job beta"),
+      hold(container, "Job gamma"),
+    ];
+
+    const { lastFrame, unmount } = render(<App container={container} />);
+    await settle();
+
+    expect(lastFrame()).toContain("1 more job running. J to see them.");
+
+    for (const release of releases) release();
+    await settle();
+    unmount();
+  });
+
+  it("takes no room when nothing is running", async () => {
+    const { lastFrame, unmount } = render(<App container={build(seed)} />);
+    await settle();
+
+    expect(lastFrame()).not.toContain("more jobs running");
+    expect(lastFrame()).not.toContain("repositioning");
+    unmount();
+  });
+});
