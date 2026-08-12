@@ -22,7 +22,7 @@ export type Screen =
     }
   | { readonly name: "consume"; readonly queue: Queue }
   | { readonly name: "publish"; readonly queue?: Queue }
-  | { readonly name: "transfer"; readonly from?: Queue }
+  | { readonly name: "transfer"; readonly sources?: readonly Queue[] }
   | { readonly name: "export"; readonly queue: Queue }
   | { readonly name: "import"; readonly queue: Queue }
   | { readonly name: "connections" }
@@ -71,8 +71,12 @@ export function screenTitle(screen: Screen): string {
       return `Consume ${screen.queue.name}`;
     case "publish":
       return "Publish";
-    case "transfer":
-      return "Move messages";
+    case "transfer": {
+      const sources = screen.sources ?? [];
+      return sources.length > 1
+        ? `Move ${sources.length} queues`
+        : "Move messages";
+    }
     case "export":
       return `Export ${screen.queue.name}`;
     case "import":

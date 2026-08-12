@@ -206,9 +206,7 @@ export function ScreenRouter({
           queues={ctx.container.queues}
           jobs={ctx.container.jobs}
           connection={ctx.connection}
-          {...(screen.from === undefined
-            ? {}
-            : { fromQueue: screen.from.name })}
+          {...(screen.sources === undefined ? {} : { sources: screen.sources })}
           isActive={ctx.isActive}
           onCancel={ctx.back}
           onDone={(text) => {

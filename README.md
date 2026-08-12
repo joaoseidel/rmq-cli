@@ -65,11 +65,17 @@ Press `?` for context-sensitive help. The footer always shows available keys for
 | `Esc`          | back one screen                             |
 | `q`            | back or quit                                |
 
-**Queue list:** `p` purge, `t` tail, `e` export, `i` import, `w` publish, `m` move, `c` connections, `v` virtual hosts.
+**Queue list:** `p` purge, `t` tail, `e` export, `i` import, `w` publish, `m` move, `R` reprocess, `c` connections, `v` virtual hosts.
 
 **Queue or message:** `d` delete, `M` move, `R` reprocess to original exchange.
 
 **Search results:** `+` / `-` adjust depth (remembered between runs), `r` re-run, `/` new search.
+
+### Whole-queue moves
+
+`m` on the queue list moves messages out of the queues you marked with `space`, or the one under the cursor if you marked none. Pick one destination and either a per-queue limit or everything; each source is drained and backed up on its own, so a queue that fails leaves the ones already moved alone. The destination cannot be one of the sources, and a destination that does not exist is refused before anything is taken.
+
+`R` reprocesses whole queues: every message is republished to the exchange and routing key it originally arrived on, then taken off the queue. This is how a dead-letter queue is drained back into normal flow. Messages whose exchange still routes back to the same queue land there again - the confirmation says so before you commit.
 
 **Background jobs:** `J` opens the job list from anywhere; `x` cancels one, `d` dismisses a finished one, `c` clears them all. Quitting while work is running asks first.
 
@@ -89,7 +95,7 @@ Terms are literal by default, so braces, brackets and pipes in a payload are saf
 ## Safety
 
 - Browsing reads without acknowledgement - nothing is consumed.
-- Only purge, delete, move, and export-with-removal change anything, and each asks first.
+- Only purge, delete, move, reprocess, and export-with-removal change anything, and each asks first.
 - Single-message delete/move/reprocess drains and republishes the queue; the app warns before doing it.
 - All destructive operations run behind a write-ahead log at `~/.rmq-cli/message_backup_operations.json`.
 - Moves publish the copy before removing the original - interruption duplicates, never loses.

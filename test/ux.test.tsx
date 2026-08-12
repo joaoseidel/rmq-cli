@@ -17,7 +17,7 @@ import { JobManager } from "../src/core/usecase/jobs.ts";
 import { MessageOperations } from "../src/core/usecase/message-operations.ts";
 import { QueueOperations } from "../src/core/usecase/queue-operations.ts";
 import { VHostOperations } from "../src/core/usecase/vhost-operations.ts";
-import { paletteActions } from "../src/ui/actions.ts";
+import { paletteActions, rowActions } from "../src/ui/actions.ts";
 import { App } from "../src/ui/components/app.tsx";
 import { KeyHints } from "../src/ui/components/parts/key-hints.tsx";
 import { sectionsFor } from "../src/ui/components/screens/help-screen.tsx";
@@ -152,6 +152,38 @@ describe("the action list", () => {
       if (screen !== "queues") expect(ids).toContain("queues");
     }
   });
+
+  it("offers the whole-queue actions on the row menu of a queue", () => {
+    const queue = {
+      name: "order-dlq",
+      vhost: "/",
+      messagesReady: 3,
+      messagesUnacknowledged: 0,
+    };
+
+    const ids = rowActions({
+      screen: "queues",
+      selection: { queue, message: null },
+      row: queue,
+      isAmqp: true,
+    }).map((action) => action.id);
+
+    expect(ids).toContain("transfer");
+    expect(ids).toContain("reprocess-queue");
+    expect(ids).toContain("purge");
+  });
+
+  it("marks the whole-queue actions unavailable when no queue is selected", () => {
+    const blocked = rowActions({
+      screen: "queues",
+      selection: { queue: null, message: null },
+      row: null,
+      isAmqp: true,
+    }).filter((action) => action.unavailable !== undefined);
+
+    expect(blocked.map((action) => action.id)).toContain("transfer");
+    expect(blocked.map((action) => action.id)).toContain("reprocess-queue");
+  });
 });
 
 describe("filtering is case-insensitive", () => {
@@ -261,6 +293,63 @@ describe("destination queues", () => {
     await settle();
 
     expect(lastFrame() ?? "").toContain("order-failed");
+    unmount();
+  });
+});
+
+describe("acting on the queues you marked", () => {
+  it("moves out of every marked queue, not just the cursor row", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <App container={build(seed)} />,
+    );
+    await settle();
+
+    stdin.write(" ");
+    await settle();
+    stdin.write(" ");
+    await settle();
+    stdin.write("m");
+    await settle();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Move 2 queues");
+    expect(frame).toContain("'order-processing', 'order-failed'");
+    expect(frame).toContain("How many each");
+    expect(frame).not.toContain("From queue");
+    unmount();
+  });
+
+  it("names every marked queue before reprocessing them", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <App container={build(seed)} />,
+    );
+    await settle();
+
+    stdin.write(" ");
+    await settle();
+    stdin.write(" ");
+    await settle();
+    stdin.write("R");
+    await settle();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Reprocess 2 queues");
+    expect(frame).toContain("order-processing");
+    expect(frame).toContain("the exchange it came from");
+    unmount();
+  });
+
+  it("falls back to the row under the cursor when nothing is marked", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <App container={build(seed)} />,
+    );
+    await settle();
+
+    stdin.write("R");
+    await settle();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Reprocess 'order-processing'");
     unmount();
   });
 });

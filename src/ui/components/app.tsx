@@ -6,6 +6,8 @@ import { displayExchange, type Message } from "../../core/domain/message.ts";
 import type { Queue } from "../../core/domain/queue.ts";
 import { totalMessages } from "../../core/domain/queue.ts";
 import { isActive as isJobActive, type Job } from "../../core/usecase/jobs.ts";
+import { ALL_MESSAGES } from "../../core/usecase/message-operations.ts";
+import { listNames, totalsOf } from "../../core/usecase/queue-operations.ts";
 import { mapWithConcurrency } from "../../core/util/pool.ts";
 import {
   errorMessage,
@@ -50,6 +52,7 @@ const DANGER_NOTICE_MS = 10_000;
 
 type PendingAction =
   | { readonly kind: "purge"; readonly queues: readonly Queue[] }
+  | { readonly kind: "reprocess"; readonly queues: readonly Queue[] }
   | {
       readonly kind: "delete";
       readonly queue: Queue;
@@ -184,6 +187,26 @@ function confirmationFor(pending: PendingAction): string {
         : "";
 
     return `Purge ${formatCount(pending.queues.length, "queue")} (${names}${rest}), ${formatCount(total, "message")}? This cannot be undone.`;
+  }
+
+  if (pending.kind === "reprocess") {
+    const total = pending.queues.reduce(
+      (sum, queue) => sum + totalMessages(queue),
+      0,
+    );
+
+    const where =
+      pending.queues.length === 1
+        ? `'${pending.queues[0]?.name}'`
+        : `${formatCount(pending.queues.length, "queue")} (${listNames(
+            pending.queues.map((queue) => queue.name),
+          )})`;
+
+    return (
+      `Reprocess ${where}, ${formatCount(total, "message")}? ` +
+      "Each one is republished to the exchange it came from, then taken off the queue. " +
+      "Any whose exchange routes back to the same queue land there again."
+    );
   }
 
   const what =
@@ -402,6 +425,44 @@ function AppContent({ container, pageSize }: AppProps) {
             return `Purged ${formatCount(outcomes.length, "queue")}: ${formatCount(removed, "message")} removed.`;
           },
         });
+      } else if (action.kind === "reprocess") {
+        const names = action.queues.map((queue) => queue.name);
+
+        container.jobs.start({
+          kind: "reprocess",
+          title:
+            names.length === 1
+              ? `Reprocessing ${names[0]}`
+              : `Reprocessing ${formatCount(names.length, "queue")}`,
+          run: (job) =>
+            container.broker.withConnection(open, async (channel) => {
+              const outcomes = await container.queues.safeReprocessQueues({
+                queues: names,
+                limit: ALL_MESSAGES,
+                connection: channel,
+                onProgress: job.report,
+                throwIfCancelled: job.throwIfCancelled,
+              });
+
+              const { successful, failed } = totalsOf(outcomes);
+
+              if (failed > 0) {
+                const stuck = outcomes.filter(
+                  (outcome) => outcome.summary.failed > 0,
+                );
+
+                throw new Error(
+                  `Reprocessed ${successful}, but ${formatCount(failed, "message")} could not be republished ` +
+                    `from ${listNames(stuck.map((outcome) => outcome.queue))}. ` +
+                    `They are kept in a backup, under ${stuck.map((outcome) => outcome.summary.id).join(", ")}.`,
+                );
+              }
+
+              return names.length === 1
+                ? `Reprocessed ${formatCount(successful, "message")} from ${names[0]}.`
+                : `Reprocessed ${formatCount(successful, "message")} from ${formatCount(names.length, "queue")}.`;
+            }),
+        });
       } else {
         container.jobs.start({
           kind: "delete",
@@ -510,11 +571,12 @@ function AppContent({ container, pageSize }: AppProps) {
             stack.push({ name: "import", queue: currentQueue });
           break;
         case "transfer":
-          stack.push(
-            currentQueue === null
-              ? { name: "transfer" }
-              : { name: "transfer", from: currentQueue },
-          );
+          stack.push({ name: "transfer", sources: targetQueues });
+          break;
+        case "reprocess-queue":
+          if (targetQueues.length > 0)
+            setPending({ kind: "reprocess", queues: targetQueues });
+          else announce("Select a queue first.", "danger");
           break;
         case "requeue-message":
           if (currentQueue !== null && targetMessages.length > 0) {
